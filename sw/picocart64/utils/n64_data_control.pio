@@ -1,0 +1,99 @@
+; pins
+; 0-15 = Address lines
+; 16 ALE_L
+; 17 ALE_H
+; 18 WRITE
+; 19 READ
+; 20 CIC_DCLK
+; 21 CIC_DIO
+; 22 COLD_RESET
+
+; pin and bit position
+; 19    18     17     16
+; read  write  ale_h  ale_l
+
+.define public CYCLE_MULTIPLIER 3
+.define public RW_HIGH_LOW_MIN_CYCLES 3 * CYCLE_MULTIPLIER
+.define public RW_DELAY_BEFORE_LOW_CYCLES 64 * CYCLE_MULTIPLIER
+.define public RW_STAY_LOW_BEFORE_HIGH_CYCLES 12 * CYCLE_MULTIPLIER
+.define public ALE_LOW_DELAY RW_STAY_LOW_BEFORE_HIGH_CYCLES / 2
+.define public DATA_SM_SIGNAL 4
+.define public CONTROL_SM_SIGNAL 5
+
+.program n64_data_control
+set_address:
+; ALE_H and READ -> high
+; delay RW_STAY_LOW_BEFORE_HIGH_CYCLES
+set pins, 0b1010 [31]
+nop [5]
+
+; now set ALE_L high 
+set pins, 0b1011 [ALE_LOW_DELAY]
+
+send_address:
+; Let data sm know it's okay to start sending address
+; data sm is sending address...
+; wait until it's finished
+irq set CONTROL_SM_SIGNAL
+wait 1 irq DATA_SM_SIGNAL
+
+; delay while the cartridge reads the info
+nop [ALE_LOW_DELAY] 
+
+; After a delay (above) ALE_H -> low
+set pins, 0b1001
+
+; let data sm know that it can send the last 16 bits of the address
+irq set CONTROL_SM_SIGNAL
+
+; wait until data says it's sent the data
+wait 1 irq DATA_SM_SIGNAL
+
+; delay to give cartridge time to read data
+nop [ALE_LOW_DELAY]
+
+; READ -> low
+set pins, 0b0000
+
+; let data know it can now flip input pins to start reading data from cart
+irq set CONTROL_SM_SIGNAL
+
+read_data_control:
+    ; 16 bits of data is being sent from cart
+    ; min amount of time per word
+    ; then set read -> low to let the cartridge know we are ready for the next word
+    ;nop [RW_STAY_LOW_BEFORE_HIGH_CYCLES]
+    ; max 31 delay cycles :'(
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    
+    ; set read -> high and wait before accepting more data
+    set pins, 0b1000 [RW_HIGH_LOW_MIN_CYCLES]
+    irq set CONTROL_SM_SIGNAL
+    set pins, 0b0000 ; set read -> low
+    
+    ; if we want to get another address, we should restart both state machines
+jmp read_data_control
+
+% c-sdk {
+void n64_data_control_program_init(PIO pio, uint sm, uint offset) {
+    // gpio16 -> 19 are control lines (ignore the cic stuff for now)
+    for (int i = 16; i <= 19; i++) {
+        pio_gpio_init(pio, i);
+    }
+
+    // gpio 16 -> 22
+    pio_sm_set_consecutive_pindirs(pio, sm, 16, 4, true);
+
+    pio_sm_config c = n64_data_control_program_get_default_config(offset);
+
+    // Control line pins are all output lines
+    sm_config_set_out_pins(&c, 16, 4);
+
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

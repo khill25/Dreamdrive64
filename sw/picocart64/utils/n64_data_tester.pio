@@ -1,0 +1,87 @@
+; pins
+; 0-15 = Address lines
+; 16 ALE_L
+; 17 ALE_H
+; 18 WRITE
+; 19 READ
+; 20 CIC_DCLK
+; 21 CIC_DIO
+; 22 COLD_RESET
+
+; multiples of a machine cycle = 62.5mhz (16ns)
+; bus speed is a multiple of this value
+; at least 3 cycles (48ns) for read/write signal high before low
+; at least 64 cycles (1024ns) between sending an address and read/write data from bus
+; at least 12 cycles (192ns) how long read/write signal stays low before going high
+
+; with rp2040 clocked at 133mhz, this is close enough to 2 cycles per 1 n64 cycle
+; but let's use 3 to make sure there is enough time for these signals (as it's 2.128* faster), 2 might cause issues?
+
+; Not sure if you can/how to share defines across pio files
+; so duplicate the defines here and weep
+.define public DATA_SM_SIGNAL 4
+.define public CONTROL_SM_SIGNAL 5
+
+.program n64_data_tester
+
+send_address:
+; set pins to output
+mov osr, ~null
+out pindirs, 32
+
+wait 1 irq CONTROL_SM_SIGNAL
+; send address we want from the cartridge
+pull
+
+; send the first 16 bits of the address we want read
+out pins, 16 ; will consume first 16 bits (high address)
+
+; let control sm know we have sent first part of address
+irq set DATA_SM_SIGNAL
+
+; wait for ALE_L -> low signal from control sm that address line has changed
+wait 1 irq CONTROL_SM_SIGNAL
+
+; send the low address portion
+out pins, 16 ; consume the last 16 bits (low address)
+
+; let control sm know we finished sending address
+irq set DATA_SM_SIGNAL
+
+; wait for control to tell us we can read data
+wait irq CONTROL_SM_SIGNAL
+
+; flip pins to input
+mov osr, !null
+out pindirs, 32
+
+; read 16 bits of data (a word)
+; and wait pulse the input via signals from data sm
+read_data:
+    in pins, 16 ; send data
+    wait 1 irq CONTROL_SM_SIGNAL ; wait before sending more
+    ; if we want to get another address, we should restart both state machines
+jmp read_data
+
+% c-sdk {
+void n64_data_tester_program_init(PIO pio, uint sm, uint offset) {
+    // gpio0 -> 15 input
+    for (int i = 0; i <= 15; i++) {
+        pio_gpio_init(pio, i);
+    }
+
+    // AD0 -> AD15 input
+    // gpio 0 -> 22 are outputs for now
+    pio_sm_set_consecutive_pindirs(pio, sm, 0, 16, true);
+
+    pio_sm_config c = n64_data_tester_program_get_default_config(offset);
+
+    // AD0 -> AD15 as IN pins
+    sm_config_set_in_pins(&c, 0);
+
+    // AD0 -> AD15 as OUT pins
+    sm_config_set_out_pins(&c, 0, 16);
+
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}
