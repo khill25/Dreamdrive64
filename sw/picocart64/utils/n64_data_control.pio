@@ -12,7 +12,8 @@
 ; 19    18     17     16
 ; read  write  ale_h  ale_l
 
-.define public CYCLE_MULTIPLIER 3
+;.define public CYCLE_MULTIPLIER 3
+.define public CYCLE_MULTIPLIER 1
 .define public RW_HIGH_LOW_MIN_CYCLES 3 * CYCLE_MULTIPLIER
 .define public RW_DELAY_BEFORE_LOW_CYCLES 64 * CYCLE_MULTIPLIER
 .define public RW_STAY_LOW_BEFORE_HIGH_CYCLES 12 * CYCLE_MULTIPLIER
@@ -24,8 +25,7 @@
 set_address:
 ; ALE_H and READ -> high
 ; delay RW_STAY_LOW_BEFORE_HIGH_CYCLES
-set pins, 0b1010 [31]
-nop [5]
+set pins, 0b1010 [RW_STAY_LOW_BEFORE_HIGH_CYCLES]
 
 ; now set ALE_L high 
 set pins, 0b1011 [ALE_LOW_DELAY]
@@ -33,24 +33,15 @@ set pins, 0b1011 [ALE_LOW_DELAY]
 send_address:
 ; Let data sm know it's okay to start sending address
 ; data sm is sending address...
-; wait until it's finished
-irq set CONTROL_SM_SIGNAL
-wait 1 irq DATA_SM_SIGNAL
-
 ; delay while the cartridge reads the info
-nop [ALE_LOW_DELAY] 
+irq set CONTROL_SM_SIGNAL [ALE_LOW_DELAY]
 
 ; After a delay (above) ALE_H -> low
 set pins, 0b1001
 
 ; let data sm know that it can send the last 16 bits of the address
-irq set CONTROL_SM_SIGNAL
-
-; wait until data says it's sent the data
-wait 1 irq DATA_SM_SIGNAL
-
-; delay to give cartridge time to read data
-nop [ALE_LOW_DELAY]
+; and delay to give cartridge time to read data
+irq set CONTROL_SM_SIGNAL [ALE_LOW_DELAY]
 
 ; READ -> low
 set pins, 0b0000
@@ -93,6 +84,9 @@ void n64_data_control_program_init(PIO pio, uint sm, uint offset) {
 
     // Control line pins are all output lines
     sm_config_set_out_pins(&c, 16, 4);
+
+    // Set `SET` pins so that set commants actually work
+    sm_config_set_set_pins(&c, 16, 4);
 
     pio_sm_init(pio, sm, offset, &c);
 }

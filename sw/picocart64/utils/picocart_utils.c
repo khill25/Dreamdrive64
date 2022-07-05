@@ -8,15 +8,59 @@
 #include "hardware/pio.h"
 
 #include "picocart64_pins.h"
-#include "data.h"
+// todo include some kind of data or rom file header
 
 // Build cofig
 // 0 = simple test program
 // 1 = picocart64 ("master") pico 
 // 2 = test pico that mimics n64 bus
-#define BUILD_CONFIG 2
+// 3 = playground
+#define BUILD_CONFIG 0
+
+#if BUILD_CONFIG == 3
+#include "hardware/structs/systick.h"
+
+/*
+uint32_t startTime;
+systick_hw->csr = 0x5;
+systick_hw->rvr = 0x00FFFFFF;
+startTime = systick_hw->cvr;
+printf("read latency %d", systick_hw->cvr - startTime);
+*/
+int main() {
+    stdio_init_all();
+
+    sleep_ms(5000);
+
+    systick_hw->csr = 0x5;
+    systick_hw->rvr = 0x00FFFFFF;
+
+    uint32_t new, old, t0, t1;
+    old=systick_hw->cvr;
+
+    t0=time_us_32();
+    sleep_us(49999);
+    new=systick_hw->cvr;
+    t1=time_us_32();
+
+    // printf("\n          old-new=%d\n",old-new);
+    // printf("            t1-t0=%d\n",t1-t0);
+    // printf("(old-new)/(t1-t0)=%.1f\n",(old-new)/(t1-t0*1.0));
+    // printf("(t1-t0)/(old-new)=%.7f\n",1e3*(t1-t0)/(old-new));
+
+    while(true) {
+        
+    }
+
+    return 0;
+}
+
+#endif
 
 #if BUILD_CONFIG == 0
+
+#include "rom.h"
+
 #define GPIO_0 0
 #define GPIO_1 1
 #define GPIO_2 2
@@ -24,31 +68,31 @@
 
 uint32_t responseStartTime = 0;
 uint32_t responseTime = 0;
-uint32_t buf[count_of(data)];
+uint32_t buf[256];
+#define DMA_TRANSFER_COUNT 256 // 256 transfers (of 32 bits)
 
 // The XIP has some internal hardware that can stream a linear access sequence
 // to a DMAable FIFO, while the system is still doing random accesses on flash
 // code + data.
-void trigger_data_write() {
+void read_from_flash() {
     // Start DMA transfer from XIP stream FIFO to our buffer in memory. Use
     // the auxiliary bus slave for the DMA<-FIFO accesses, to avoid stalling
     // the DMA against general XIP traffic. Doesn't really matter for this
     // example, but it can have a huge effect on DMA throughput.
 
-    // printf("Starting DMA\n");
     /// \tag::start_dma[]
     const uint dma_chan = 0;
     dma_channel_config cfg = dma_channel_get_default_config(dma_chan);
     channel_config_set_read_increment(&cfg, false);
     channel_config_set_write_increment(&cfg, true);
     channel_config_set_dreq(&cfg, DREQ_XIP_STREAM);
-    //channel_config_set_transfer_data_size(&cfg, DMA_SIZE_16);
+    //channel_config_set_transfer_data_size(&cfg, DMA_SIZE_16); // we can set the size of the data we are writing, probably would make sense to just write 16 bits and save half the data size
     dma_channel_configure(
             dma_chan,
             &cfg,
             (void *) buf,                 // Write addr
             (const void *) XIP_AUX_BASE,  // Read addr
-            count_of(data),               // Transfer count
+            DMA_TRANSFER_COUNT,           // Transfer count
             false                         // Don't start immediately
     );
     /// \end::start_dma[]
@@ -57,8 +101,6 @@ void trigger_data_write() {
     dma_channel_transfer_from_buffer_now(dma_chan, (const void *) XIP_AUX_BASE, 1);
 
     dma_channel_wait_for_finish_blocking(dma_chan);
-
-    // printf("DMA complete\n");
 
     unsigned bit0 = (buf[0] >> 0) & 1; // get first 1 bit
     // repeat for each bit (16)
@@ -83,8 +125,9 @@ void gpio_callback(uint gpio, uint32_t events) {
 
 int writeDataToFlash() {
     printf("writing data to flash\n");
-    for (int i = 0; i < count_of(data); ++i)
-        buf[i] = 0;
+    for (int i = 0; i < DMA_TRANSFER_COUNT; ++i) {
+        buf[i] = rom_file[i];
+    }
 
     // This example won't work with PICO_NO_FLASH builds. Note that XIP stream
     // can be made to work in these cases, if you enable some XIP mode first
@@ -178,26 +221,44 @@ int main() {
 #if BUILD_CONFIG == 2
 #include "n64_data_control.pio.h"
 #include "n64_data_tester.pio.h"
+#include "rom.h"
+
+#define CONTROL_SM 0
+#define DATA_SM 1
 
 PIO pio;
 
-static inline uint32_t swap16(uint32_t value)
-{
+#define BAD_DATA_ADDRESS 0
+#define BAD_DATA_VALUE 1
+#define BAD_DATA_ISBAD 2
+uint32_t badData[256][3];
+bool hasBadData = false;
+
+static inline uint32_t swap16(uint32_t value) {
     // 0x11223344 => 0x33441122
     return (value << 16) | (value >> 16);
 }
 
 void sendAddress(uint32_t address) {
-    pio_sm_put_blocking(pio, 0, swap16(address));
+    pio_sm_put_blocking(pio, DATA_SM, swap16(address));
 }
 
 int main() {
     stdio_init_all();
 
+    // init badData array
+    for (int i = 0; i < 256; i++) {
+        badData[i][BAD_DATA_ADDRESS] = 0;
+        badData[i][BAD_DATA_VALUE] = 0;
+        badData[i][BAD_DATA_ISBAD] = 0;
+    }
+
     for (int i = 0; i <= 22; i++) {
         gpio_init(i);
         gpio_set_dir(i, GPIO_IN);
-        gpio_set_pulls(i, false, false);
+        if (i > 15) {
+            gpio_set_pulls(i, false, true);
+        }
     }
 
     // Init PIO
@@ -205,13 +266,18 @@ int main() {
 
     // data control state machine
     uint offset = pio_add_program(pio, &n64_data_control_program);
-    n64_data_control_program_init(pio, 1, offset);
-    pio_sm_set_enabled(pio, 1, true);
-
-    // data io state machine
+    n64_data_control_program_init(pio, CONTROL_SM, offset);
+    
+    // // data io state machine
     offset = pio_add_program(pio, &n64_data_tester_program);
-    n64_data_tester_program_init(pio, 0, offset);
-    pio_sm_set_enabled(pio, 0, true);
+    n64_data_tester_program_init(pio, DATA_SM, offset);
+
+    // might need to add this for pios using `set`
+    // pio_sm_set_set_pins(pio, sm, 16, 1);
+
+    pio_sm_set_enabled(pio, CONTROL_SM, true);
+    pio_sm_set_enabled(pio, DATA_SM, true);
+
 
     uint32_t currentAddress = 0x10000000;
     while(true) {
@@ -220,24 +286,50 @@ int main() {
 
         // read data from bus until we have read 256 words of data (256 reads)
         for (uint16_t i = 0; i < 256; i++) {
-            uint32_t data = pio_sm_get_blocking(pio, 0);
+            uint32_t data = pio_sm_get_blocking(pio, DATA_SM);
+            
             // verify data
+            verifyData(data, currentAddress, i);
+
+            currentAddress += 2; // increment current address by 2 bytes each loop
+        }
+
+        if (hasBadData) {
+            printf("Bad data detected\n\n\n");
+            for (int i = 0; i < 256; i++) {
+                if (badData[i][BAD_DATA_ISBAD] == 1) {
+                    printf("%#10x: %#04x, ", badData[i][BAD_DATA_ADDRESS], badData[i][BAD_DATA_VALUE]);
+                }
+
+                // while we are here, clear any state so we can use this again
+                badData[i][BAD_DATA_ADDRESS] = 0;
+                badData[i][BAD_DATA_VALUE] = 0;
+                badData[i][BAD_DATA_ISBAD] = 0;
+            }
+        } else {
+            printf("No bad data detected!\n");
         }
 
         // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
-        pio_sm_restart(pio, 0);
-        pio_sm_restart(pio, 1);
+        pio_sm_restart(pio, CONTROL_SM);
+        pio_sm_restart(pio, DATA_SM);
+
+        // reset the current address, just keep looping over the same 256 words
+        currentAddress = 0x10000000;
     }
 
     return 0;
 }
 
-void writeData() {
+bool verifyData(uint32_t data, uint32_t address, uint32_t index) {
+    uint32_t rom_data = rom_file[(address & 0xFFFFFF) >> 1];
 
-}
-
-void readData() {
-
+    if (data != rom_data) {
+        badData[index][BAD_DATA_ADDRESS] = address;
+        badData[index][BAD_DATA_VALUE] = data;
+        badData[index][BAD_DATA_ISBAD] = 1;
+        hasBadData = true;
+    }
 }
 
 #endif

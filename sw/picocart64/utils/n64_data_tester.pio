@@ -26,6 +26,7 @@
 
 send_address:
 ; set pins to output
+; not sure if I need this?
 mov osr, ~null
 out pindirs, 32
 
@@ -36,17 +37,11 @@ pull
 ; send the first 16 bits of the address we want read
 out pins, 16 ; will consume first 16 bits (high address)
 
-; let control sm know we have sent first part of address
-irq set DATA_SM_SIGNAL
-
-; wait for ALE_L -> low signal from control sm that address line has changed
+; wait for ALE_L -> low signal from control sm that address line has changed 
 wait 1 irq CONTROL_SM_SIGNAL
 
 ; send the low address portion
 out pins, 16 ; consume the last 16 bits (low address)
-
-; let control sm know we finished sending address
-irq set DATA_SM_SIGNAL
 
 ; wait for control to tell us we can read data
 wait irq CONTROL_SM_SIGNAL
