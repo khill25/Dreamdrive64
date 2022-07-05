@@ -15,7 +15,7 @@
 // 1 = picocart64 ("master") pico 
 // 2 = test pico that mimics n64 bus
 // 3 = playground
-#define BUILD_CONFIG 0
+#define BUILD_CONFIG 2
 
 #if BUILD_CONFIG == 3
 #include "hardware/structs/systick.h"
@@ -102,10 +102,10 @@ void read_from_flash() {
 
     dma_channel_wait_for_finish_blocking(dma_chan);
 
-    unsigned bit0 = (buf[0] >> 0) & 1; // get first 1 bit
-    // repeat for each bit (16)
-    // send bit to corresponding gpio pin
-    gpio_put(GPIO_0, bit0);
+    // unsigned bit0 = (buf[0] >> 0) & 1; // get first 1 bit
+    // // repeat for each bit (16)
+    // // send bit to corresponding gpio pin
+    // gpio_put(GPIO_0, bit0);
 
     responseTime = time_us_32() - responseStartTime;
     printf("response time %zu for value %d\n", responseTime, bit0);
@@ -243,6 +243,17 @@ void sendAddress(uint32_t address) {
     pio_sm_put_blocking(pio, DATA_SM, swap16(address));
 }
 
+void verifyData(uint32_t data, uint32_t address, uint32_t index) {
+    uint32_t rom_data = rom_file[(address & 0xFFFFFF) >> 1];
+
+    if (data != rom_data) {
+        badData[index][BAD_DATA_ADDRESS] = address;
+        badData[index][BAD_DATA_VALUE] = data;
+        badData[index][BAD_DATA_ISBAD] = 1;
+        hasBadData = true;
+    }
+}
+
 int main() {
     stdio_init_all();
 
@@ -255,11 +266,16 @@ int main() {
 
     for (int i = 0; i <= 22; i++) {
         gpio_init(i);
-        gpio_set_dir(i, GPIO_IN);
-        if (i > 15) {
-            gpio_set_pulls(i, false, true);
+        if (i < 16) {
+            gpio_set_dir(i, GPIO_IN);
+        } else {
+            //gpio_set_pulls(i, false, false);
+            gpio_set_dir(i, GPIO_OUT);
         }
     }
+
+    sleep_ms(5000);
+    printf("Initializing...\n");
 
     // Init PIO
     pio = pio0;
@@ -273,16 +289,19 @@ int main() {
     n64_data_tester_program_init(pio, DATA_SM, offset);
 
     // might need to add this for pios using `set`
-    // pio_sm_set_set_pins(pio, sm, 16, 1);
+    //pio_sm_set_set_pins(pio, 0, 16, 4);
 
+    printf("Enabling PIO programs...\n");
     pio_sm_set_enabled(pio, CONTROL_SM, true);
     pio_sm_set_enabled(pio, DATA_SM, true);
-
+    printf("PIO programs enabled!\n");
 
     uint32_t currentAddress = 0x10000000;
     while(true) {
         // Now we can send the address that we want to read from
+        printf("Sending address\n");
         sendAddress(currentAddress);
+        printf("Address sent\n");
 
         // read data from bus until we have read 256 words of data (256 reads)
         for (uint16_t i = 0; i < 256; i++) {
@@ -310,6 +329,9 @@ int main() {
             printf("No bad data detected!\n");
         }
 
+        // reset the bad data flag as we go for another pass
+        hasBadData = false;
+
         // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
         pio_sm_restart(pio, CONTROL_SM);
         pio_sm_restart(pio, DATA_SM);
@@ -319,17 +341,6 @@ int main() {
     }
 
     return 0;
-}
-
-bool verifyData(uint32_t data, uint32_t address, uint32_t index) {
-    uint32_t rom_data = rom_file[(address & 0xFFFFFF) >> 1];
-
-    if (data != rom_data) {
-        badData[index][BAD_DATA_ADDRESS] = address;
-        badData[index][BAD_DATA_VALUE] = data;
-        badData[index][BAD_DATA_ISBAD] = 1;
-        hasBadData = true;
-    }
 }
 
 #endif

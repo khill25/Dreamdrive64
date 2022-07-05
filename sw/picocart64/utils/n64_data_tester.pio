@@ -47,7 +47,7 @@ out pins, 16 ; consume the last 16 bits (low address)
 wait irq CONTROL_SM_SIGNAL
 
 ; flip pins to input
-mov osr, !null
+mov osr, null
 out pindirs, 32
 
 ; read 16 bits of data (a word)
