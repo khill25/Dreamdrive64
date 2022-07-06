@@ -37,7 +37,7 @@ send_address:
 irq set CONTROL_SM_SIGNAL [ALE_LOW_DELAY]
 
 ; After a delay (above) ALE_H -> low
-set pins, 0b1001
+set pins, 0b1000
 
 ; let data sm know that it can send the last 16 bits of the address
 ; and delay to give cartridge time to read data
@@ -47,7 +47,7 @@ irq set CONTROL_SM_SIGNAL [ALE_LOW_DELAY]
 set pins, 0b0000
 
 ; let data know it can now flip input pins to start reading data from cart
-irq set CONTROL_SM_SIGNAL
+irq set CONTROL_SM_SIGNAL [31]
 
 read_data_control:
     ; 16 bits of data is being sent from cart
@@ -57,10 +57,10 @@ read_data_control:
     ; max 31 delay cycles :'(
     nop [31]
     nop [31]
-    nop [31]
-    nop [31]
-    nop [31]
-    nop [31]
+    ;nop [31]
+    ;nop [31]
+    ;nop [31]
+    ;nop [31]
     
     ; set read -> high and wait before accepting more data
     set pins, 0b1000 [RW_HIGH_LOW_MIN_CYCLES]
@@ -71,7 +71,7 @@ read_data_control:
 jmp read_data_control
 
 % c-sdk {
-void n64_data_control_program_init(PIO pio, uint sm, uint offset) {
+void n64_data_control_program_init(PIO pio, uint sm, uint offset, float clockDivider) {
     // gpio16 -> 19 are control lines (ignore the cic stuff for now)
     for (int i = 16; i <= 19; i++) {
         pio_gpio_init(pio, i);
@@ -87,6 +87,8 @@ void n64_data_control_program_init(PIO pio, uint sm, uint offset) {
 
     // Set `SET` pins so that set commants actually work
     sm_config_set_set_pins(&c, 16, 4);
+
+    sm_config_set_clkdiv(&c, clockDivider);
 
     pio_sm_init(pio, sm, offset, &c);
 }

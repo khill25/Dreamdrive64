@@ -15,6 +15,7 @@ target_link_libraries(picocart_utils
     pico_stdlib
     hardware_dma
     hardware_pio
+    hardware_spi
 )
  
 # Initalise the SDK

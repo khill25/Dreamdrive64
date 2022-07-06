@@ -30,22 +30,27 @@ send_address:
 mov osr, ~null
 out pindirs, 32
 
-wait 1 irq CONTROL_SM_SIGNAL
+;; Do this from C before we send data
+wait 0 irq CONTROL_SM_SIGNAL 
+
 ; send address we want from the cartridge
 pull
 
+send_upper:
 ; send the first 16 bits of the address we want read
-out pins, 16 ; will consume first 16 bits (high address)
+out pins, 16; will consume first 16 bits (high address)
 
 ; wait for ALE_L -> low signal from control sm that address line has changed 
-wait 1 irq CONTROL_SM_SIGNAL
+wait 0 irq CONTROL_SM_SIGNAL
+send_lower:
 
 ; send the low address portion
-out pins, 16 ; consume the last 16 bits (low address)
+out pins, 16; consume the last 16 bits (low address)
 
 ; wait for control to tell us we can read data
-wait irq CONTROL_SM_SIGNAL
+wait 0 irq CONTROL_SM_SIGNAL
 
+init_input:
 ; flip pins to input
 mov osr, null
 out pindirs, 32
@@ -54,19 +59,18 @@ out pindirs, 32
 ; and wait pulse the input via signals from data sm
 read_data:
     in pins, 16 ; send data
-    wait 1 irq CONTROL_SM_SIGNAL ; wait before sending more
+    wait 0 irq CONTROL_SM_SIGNAL ; wait before sending more
     ; if we want to get another address, we should restart both state machines
 jmp read_data
 
 % c-sdk {
-void n64_data_tester_program_init(PIO pio, uint sm, uint offset) {
+void n64_data_tester_program_init(PIO pio, uint sm, uint offset, float clockDivider) {
     // gpio0 -> 15 input
     for (int i = 0; i <= 15; i++) {
         pio_gpio_init(pio, i);
     }
 
-    // AD0 -> AD15 input
-    // gpio 0 -> 22 are outputs for now
+    // AD0 -> AD15 output
     pio_sm_set_consecutive_pindirs(pio, sm, 0, 16, true);
 
     pio_sm_config c = n64_data_tester_program_get_default_config(offset);
@@ -76,6 +80,8 @@ void n64_data_tester_program_init(PIO pio, uint sm, uint offset) {
 
     // AD0 -> AD15 as OUT pins
     sm_config_set_out_pins(&c, 0, 16);
+
+    sm_config_set_clkdiv(&c, clockDivider);
 
     pio_sm_init(pio, sm, offset, &c);
 }

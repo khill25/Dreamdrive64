@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
@@ -15,7 +16,8 @@
 // 1 = picocart64 ("master") pico 
 // 2 = test pico that mimics n64 bus
 // 3 = playground
-#define BUILD_CONFIG 2
+// 4 = TEST -- SPI flash code
+#define BUILD_CONFIG 4
 
 #if BUILD_CONFIG == 3
 #include "hardware/structs/systick.h"
@@ -219,14 +221,15 @@ int main() {
  * ? Should this also emulate the n64 clock pins? (ALE_L, ALE_H)?
  */
 #if BUILD_CONFIG == 2
+#include "hardware/clocks.h"
 #include "n64_data_control.pio.h"
 #include "n64_data_tester.pio.h"
 #include "rom.h"
 
 #define CONTROL_SM 0
-#define DATA_SM 1
-
+#define DATA_SM 0
 PIO pio;
+static const float pio_freq = 1024;//31250000;
 
 #define BAD_DATA_ADDRESS 0
 #define BAD_DATA_VALUE 1
@@ -269,75 +272,99 @@ int main() {
         if (i < 16) {
             gpio_set_dir(i, GPIO_IN);
         } else {
-            //gpio_set_pulls(i, false, false);
             gpio_set_dir(i, GPIO_OUT);
         }
+        gpio_pull_down(i);
     }
 
-    sleep_ms(5000);
+    for(int i = 0; i < 1000; i++) {
+        gpio_put(N64_READ, true);
+        gpio_put(N64_ALEH, true);
+        gpio_put(N64_ALEL, true);
+        sleep_ms(1);
+        gpio_put(N64_READ, false);
+        gpio_put(N64_ALEH, false);
+        gpio_put(N64_ALEL, false);
+        sleep_ms(1);
+    }
+
+    sleep_ms(1000);
     printf("Initializing...\n");
 
     // Init PIO
     pio = pio0;
 
+    // Calculate the PIO clock divider
+    float clockDivider = (float)clock_get_hz(clk_sys) / pio_freq;
+
     // data control state machine
     uint offset = pio_add_program(pio, &n64_data_control_program);
-    n64_data_control_program_init(pio, CONTROL_SM, offset);
+    n64_data_control_program_init(pio, CONTROL_SM, offset, clockDivider);
     
     // // data io state machine
     offset = pio_add_program(pio, &n64_data_tester_program);
-    n64_data_tester_program_init(pio, DATA_SM, offset);
+    n64_data_tester_program_init(pio, DATA_SM, offset, clockDivider);
 
     // might need to add this for pios using `set`
     //pio_sm_set_set_pins(pio, 0, 16, 4);
 
     printf("Enabling PIO programs...\n");
+
     pio_sm_set_enabled(pio, CONTROL_SM, true);
     pio_sm_set_enabled(pio, DATA_SM, true);
     printf("PIO programs enabled!\n");
 
-    uint32_t currentAddress = 0x10000000;
+    uint32_t currentAddress = 0x10000000;//0x10000000;
     while(true) {
         // Now we can send the address that we want to read from
-        printf("Sending address\n");
         sendAddress(currentAddress);
-        printf("Address sent\n");
+        currentAddress += 2;
 
-        // read data from bus until we have read 256 words of data (256 reads)
-        for (uint16_t i = 0; i < 256; i++) {
-            uint32_t data = pio_sm_get_blocking(pio, DATA_SM);
+        if (currentAddress > 0x40000000) {
+            currentAddress = 0x10000000;
+        }
+
+        // // read data from bus until we have read 256 words of data (256 reads)
+        // for (uint16_t i = 0; i < 256; i++) {
+        //     sleep_ms(1000);
+        //     gpio_put(N64_READ, true);
+        //     sleep_ms(100);
+        //     printf("waiting for data...\n");
+        //     uint32_t data = pio_sm_get_blocking(pio, DATA_SM);
             
-            // verify data
-            verifyData(data, currentAddress, i);
+        //     // verify data
+        //     verifyData(data, currentAddress, i);
 
-            currentAddress += 2; // increment current address by 2 bytes each loop
-        }
+        //     currentAddress += 2; // increment current address by 2 bytes each loop
+            
+        //     gpio_put(N64_READ, false);
+        // }
 
-        if (hasBadData) {
-            printf("Bad data detected\n\n\n");
-            for (int i = 0; i < 256; i++) {
-                if (badData[i][BAD_DATA_ISBAD] == 1) {
-                    printf("%#10x: %#04x, ", badData[i][BAD_DATA_ADDRESS], badData[i][BAD_DATA_VALUE]);
-                }
+        // if (hasBadData) {
+        //     printf("Bad data detected\n\n\n");
+        //     for (int i = 0; i < 256; i++) {
+        //         if (badData[i][BAD_DATA_ISBAD] == 1) {
+        //             printf("%#10x: %#04x, ", badData[i][BAD_DATA_ADDRESS], badData[i][BAD_DATA_VALUE]);
+        //         }
 
-                // while we are here, clear any state so we can use this again
-                badData[i][BAD_DATA_ADDRESS] = 0;
-                badData[i][BAD_DATA_VALUE] = 0;
-                badData[i][BAD_DATA_ISBAD] = 0;
-            }
-        } else {
-            printf("No bad data detected!\n");
-        }
+        //         // while we are here, clear any state so we can use this again
+        //         badData[i][BAD_DATA_ADDRESS] = 0;
+        //         badData[i][BAD_DATA_VALUE] = 0;
+        //         badData[i][BAD_DATA_ISBAD] = 0;
+        //     }
+        // } else {
+        //     printf("No bad data detected!\n");
+        // }
 
-        // reset the bad data flag as we go for another pass
-        hasBadData = false;
+        // // reset the bad data flag as we go for another pass
+        // hasBadData = false;
 
-        // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
-        pio_sm_restart(pio, CONTROL_SM);
-        pio_sm_restart(pio, DATA_SM);
+        // // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
+        // // pio_sm_restart(pio, CONTROL_SM);
+        // pio_sm_restart(pio, DATA_SM);
 
-        // reset the current address, just keep looping over the same 256 words
-        currentAddress = 0x10000000;
+        // // reset the current address, just keep looping over the same 256 words
+        // currentAddress = 0x10000000;
     }
 
     return 0;
@@ -345,141 +372,242 @@ int main() {
 
 #endif
 
-// Picocart64 code (this would be the pico connected to the n64 bus)
-#if BUILD_CONFIG == 1
-#include "n64_pi.pio.h"
-//const uint16_t *rom_file_16 = (uint16_t *) rom_file;
+#if BUILD_CONFIG == 4
+// Repurposed SPI flash read/write tests based on the pico/spi_flash example code
+#include "pico/binary_info.h"
+#include "hardware/spi.h"
+#include "hardware/structs/systick.h"
 
-uint32_t SRAM[32 * 1024 / 4];
-uint16_t *SRAM_16 = (uint16_t *) SRAM;
+#define FLASH_PAGE_SIZE        1024 * 8
 
-#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#define FLASH_CMD_PAGE_PROGRAM 0x02
+#define FLASH_CMD_READ         0x03 // read is 0x03, fast read is 0x0B, fast read has wait cycles between sending address and read
+#define FLASH_CMD_STATUS       0x05
+#define FLASH_CMD_WRITE_EN     0x06
+#define FLASH_CMD_SECTOR_ERASE 0x20
 
-#define PICO_LA1    (26)
-#define PICO_LA2    (27)
+#define FLASH_STATUS_BUSY_MASK 0x01
 
-#define UART_TX_PIN (28)
-#define UART_RX_PIN (29) /* not available on the pico */
-#define UART_ID     uart0
-#define BAUD_RATE   115200
+uint8_t page_buf[FLASH_PAGE_SIZE];
 
-
-static inline uint32_t swap16(uint32_t value)
-{
-    // 0x11223344 => 0x33441122
-    return (value << 16) | (value >> 16);
+static inline void cs_select(uint cs_pin) {
+    asm volatile("nop \n nop \n nop"); // FIXME
+    gpio_put(cs_pin, 0);
+    asm volatile("nop \n nop \n nop"); // FIXME
 }
 
-static inline uint32_t swap8(uint16_t value)
-{
-    // 0x1122 => 0x2211
-    return (value << 8) | (value >> 8);
+static inline void cs_deselect(uint cs_pin) {
+    asm volatile("nop \n nop \n nop"); // FIXME
+    gpio_put(cs_pin, 1);
+    asm volatile("nop \n nop \n nop"); // FIXME
+}
+
+void __not_in_flash_func(flash_read)(spi_inst_t *spi, uint cs_pin, uint32_t addr, uint8_t *buf, size_t len) {
+    cs_select(cs_pin);
+    uint8_t cmdbuf[4] = {
+            FLASH_CMD_READ,
+            addr >> 16,
+            addr >> 8,
+            addr
+    };
+    spi_write_blocking(spi, cmdbuf, 4);
+    spi_read_blocking(spi, 0, buf, len);
+    cs_deselect(cs_pin);
+}
+
+void __not_in_flash_func(flash_write_enable)(spi_inst_t *spi, uint cs_pin) {
+    cs_select(cs_pin);
+    uint8_t cmd = FLASH_CMD_WRITE_EN;
+    spi_write_blocking(spi, &cmd, 1);
+    cs_deselect(cs_pin);
+}
+
+void __not_in_flash_func(flash_wait_done)(spi_inst_t *spi, uint cs_pin) {
+    uint8_t status;
+    do {
+        cs_select(cs_pin);
+        uint8_t buf[2] = {FLASH_CMD_STATUS, 0};
+        spi_write_read_blocking(spi, buf, buf, 2);
+        cs_deselect(cs_pin);
+        status = buf[1];
+    } while (status & FLASH_STATUS_BUSY_MASK);
+}
+
+void __not_in_flash_func(flash_sector_erase)(spi_inst_t *spi, uint cs_pin, uint32_t addr) {
+    uint8_t cmdbuf[4] = {
+            FLASH_CMD_SECTOR_ERASE,
+            addr >> 16,
+            addr >> 8,
+            addr
+    };
+    flash_write_enable(spi, cs_pin);
+    cs_select(cs_pin);
+    spi_write_blocking(spi, cmdbuf, 4);
+    cs_deselect(cs_pin);
+    flash_wait_done(spi, cs_pin);
+}
+
+void __not_in_flash_func(flash_page_program)(spi_inst_t *spi, uint cs_pin, uint32_t addr, uint8_t data[]) {
+    uint8_t cmdbuf[4] = {
+            FLASH_CMD_PAGE_PROGRAM,
+            addr >> 16,
+            addr >> 8,
+            addr
+    };
+    flash_write_enable(spi, cs_pin);
+    cs_select(cs_pin);
+    spi_write_blocking(spi, cmdbuf, 4);
+    spi_write_blocking(spi, data, FLASH_PAGE_SIZE);
+    cs_deselect(cs_pin);
+    flash_wait_done(spi, cs_pin);
+}
+
+void printbuf(uint8_t buf[FLASH_PAGE_SIZE]) {
+    for (int i = 0; i < FLASH_PAGE_SIZE; ++i) {
+        if (i % 16 == 15)
+            printf("%02x\n", buf[i]);
+        else
+            printf("%02x ", buf[i]);
+    }
+}
+
+void initSPI(uint32_t hz) {
+    // Enable SPI 0 at 1 MHz and connect to GPIOs
+    printf("Initing SPI at %dMHZ\n", hz / 1000 / 1000);
+    spi_init(spi_default, hz);
+    gpio_set_function(PICO_DEFAULT_SPI_RX_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(PICO_DEFAULT_SPI_TX_PIN, GPIO_FUNC_SPI);
+    // Make the SPI pins available to picotool
+    bi_decl(bi_3pins_with_func(PICO_DEFAULT_SPI_RX_PIN, PICO_DEFAULT_SPI_TX_PIN, PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI));
+
+    // Chip select is active-low, so we'll initialise it to a driven-high state
+    gpio_init(PICO_DEFAULT_SPI_CSN_PIN);
+    gpio_put(PICO_DEFAULT_SPI_CSN_PIN, 1);
+    gpio_set_dir(PICO_DEFAULT_SPI_CSN_PIN, GPIO_OUT);
+    // Make the CS pin available to picotool
+    bi_decl(bi_1pin_with_name(PICO_DEFAULT_SPI_CSN_PIN, "SPI CS"));
+}
+
+uint32_t testRead(const uint32_t address, uint8_t *buf, uint32_t len) {
+    uint32_t startTime = systick_hw->cvr;
+    flash_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, address, buf, len);
+    uint32_t totalTime = systick_hw->cvr - startTime;
+    return totalTime;
+}
+
+// Generates random data to put into the buffer that will be written to flash
+// Always writes the full size of page_buf[FLASG_PAGE_SIZE]
+void testWrite(const uint32_t address) {
+    // Writing new data to the buffer
+    for (int i = 0; i < FLASH_PAGE_SIZE; ++i) {
+        page_buf[i] = rand() % FLASH_PAGE_SIZE;
+    }
+    printf("Starting write...\n");
+    uint32_t startTime = systick_hw->cvr;
+    flash_page_program(spi_default, PICO_DEFAULT_SPI_CSN_PIN, address, page_buf);
+    uint32_t totalTime = systick_hw->cvr - startTime;
+    printf("write latency %d\n", totalTime);  
+}
+
+void testWriteRead(const uint32_t target_addr, uint32_t len) {
+    testWrite(target_addr);
+    
+    printf("starting read...\n");
+    uint32_t totalTime = testRead(target_addr, page_buf, len);
+    printf("read latency %d\n", totalTime);
+}
+
+// Reads from flash in chunkSizeBytesToRead chunks.
+// Increments the address by chunkSizeBytesToRead and continues until FLASH_PAGE_SIZE has been reached
+void runChunkReadTest(uint32_t speed, uint8_t testNumber, const uint32_t startingAddress, uint32_t chunkSizeBytesToRead) {
+    printf("Chunk Read Test %d, %dMHZ\n", testNumber, speed / 1000 / 1000);
+    initSPI(speed);
+
+    uint32_t readTime = 0;
+    uint32_t currentAddress = startingAddress;
+    uint32_t maxReads = FLASH_PAGE_SIZE / chunkSizeBytesToRead;
+    printf("begin reading %d bytes for %d reads...\n", chunkSizeBytesToRead, maxReads);
+    uint8_t buf[2];
+    for (uint8_t i = 0; i < maxReads; i++) { 
+       readTime = testRead(currentAddress, page_buf, chunkSizeBytesToRead);
+       printf("latency %d\n", readTime);
+       currentAddress += chunkSizeBytesToRead;
+    }
+
+    // Rest between tests
+    sleep_ms(100);
+}
+
+// This runs tests using the FLASH_PAGE_SIZE buffer
+void runTest(uint32_t speed, uint8_t testNumber, const uint32_t target_addr, bool shouldPrintBuf) {
+    printf("Test %d, %dMHZ\n", testNumber, speed / 1000 / 1000);
+    initSPI(speed);
+
+    // Write 0s to the buffer to 'erase' it just to make sure we aren't running into any weirdness
+    for (int i = 0; i < FLASH_PAGE_SIZE; ++i) {
+        page_buf[i] = 0;
+    }
+
+    flash_sector_erase(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr);
+    if (shouldPrintBuf) {
+        flash_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, FLASH_PAGE_SIZE);
+        printf("Erased! contents:\n");
+        printbuf(page_buf);
+    }
+
+    testWriteRead(target_addr, FLASH_PAGE_SIZE);
+
+    printf("Write/Read complete! contents:\n");
+    if (shouldPrintBuf) {
+        printbuf(page_buf);
+    }
+
+    flash_sector_erase(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr);
+    printf("-----------------Erased again! contents:\n");
+    if (shouldPrintBuf) {
+        flash_read(spi_default, PICO_DEFAULT_SPI_CSN_PIN, target_addr, page_buf, FLASH_PAGE_SIZE);
+        printbuf(page_buf);
+    }
+
+    // Rest between tests
+    sleep_ms(100);
 }
 
 int main() {
-    // Overclock!
-    // Note that the Pico's external flash is rated to 133MHz,
-    // not sure if the flash speed is based on this clock.
+    // Enable UART so we can print status output
+    stdio_init_all();
+#if !defined(spi_default) || !defined(PICO_DEFAULT_SPI_SCK_PIN) || !defined(PICO_DEFAULT_SPI_TX_PIN) || !defined(PICO_DEFAULT_SPI_RX_PIN) || !defined(PICO_DEFAULT_SPI_CSN_PIN)
+#warning spi/spi_flash example requires a board with SPI pins
+    puts("Default SPI pins were not defined");
+#else
 
-    // set_sys_clock_khz(PLL_SYS_KHZ, true);
-    // set_sys_clock_khz(150000, true); // Does not work
-    // set_sys_clock_khz(200000, true); // Does not work
-    // set_sys_clock_khz(250000, true); // Does not work
-    // set_sys_clock_khz(300000, true); // Doesn't even boot
-    // set_sys_clock_khz(400000, true); // Doesn't even boot
+    sleep_ms(5000);
 
-    // stdio_init_all();
-
-    for (int i = 0; i <= 27; i++) {
-        gpio_init(i);
-        gpio_set_dir(i, GPIO_IN);
-        gpio_set_pulls(i, false, false);
+    printf("SPI flash speed test. Read/Writes are 1KB\n"); 
+    
+    printf("A few random numbers...\n");
+    for(int i = 0; i < 5; ++i) {
+        printf("%d\n", rand() % FLASH_PAGE_SIZE);
     }
 
-    gpio_init(N64_CIC_DCLK);
-    gpio_init(N64_CIC_DIO);
-    gpio_init(N64_COLD_RESET);
+    // setup to use clock tick counting for more granular latency testing without an oscilloscope 
+    systick_hw->csr = 0x5;
+    systick_hw->rvr = 0x00FFFFFF;
 
-    gpio_pull_up(N64_CIC_DIO);
-
-    // Init UART on pin 28/29
-    stdio_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
-    printf("PicoCart64 Booting!\r\n");
-
-    // Init PIO before starting the second core
-    PIO pio = pio0;
-    uint offset = pio_add_program(pio, &n64_pi_program);
-    n64_pi_program_init(pio, 0, offset);
-    pio_sm_set_enabled(pio, 0, true);
-
-    // Launch the CIC emulator in the second core
-    // Note! You have to power reset the pico after flashing it with a jlink,
-    //       otherwise multicore doesn't work properly.
-    //       Alternatively, attach gdb to openocd, run `mon reset halt`, `c`.
-    //       It seems this works around the issue as well.
-    //multicore_launch_core1(cic_main);
-
-    // Wait for reset to be released
-    while (gpio_get(N64_COLD_RESET) == 0) {
-        tight_loop_contents();
-    }
-
-    uint32_t n64_addr = 0;
-    uint32_t n64_addr_h = 0;
-    uint32_t n64_addr_l = 0;
-
-    uint32_t last_addr = 0;
-    uint32_t get_msb = 0;
-
-    while (1) {
-        uint32_t addr = swap16(pio_sm_get_blocking(pio, 0));
-
-        if (addr & 0x00000001) {
-            // We got a WRITE
-            // 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-            SRAM_16[(last_addr & 0xFFFFFF)>>1] = addr >> 16;
-            last_addr += 2;
-            continue;
-        }
-
-        if (addr != 0) {
-            // We got a start address
-            last_addr = addr;
-            get_msb = 1;
-            continue;
-        }
-
-        // We got a "Give me next 16 bits" command
-        uint32_t word;
-        if (last_addr == 0x10000000) {
-            // Configure bus to run slowly.
-            // This is better patched in the rom, so we won't need a branch here.
-            // But let's keep it here so it's easy to import roms easily.
-            // 0x8037FF40 in big-endian
-            word = 0x8037;
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr == 0x10000002) {
-            // Configure bus to run slowly.
-            // This is better patched in the rom, so we won't need a branch here.
-            // But let's keep it here so it's easy to import roms easily.
-            // 0x8037FF40 in big-endian
-            word = 0xFF40;
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr >= 0x08000000 && last_addr <= 0x0FFFFFFF) {
-            // Domain 2, Address 2	Cartridge SRAM
-            word = SRAM_16[(last_addr & 0xFFFFFF) >> 1];
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr >= 0x10000000 && last_addr <= 0x1FBFFFFF) {
-            // Domain 1, Address 2	Cartridge ROM
-
-            // Since I don't have the rom.h file, just comment out for the time being
-            // word = rom_file_16[(last_addr & 0xFFFFFF) >> 1];
-            // pio_sm_put_blocking(pio, 0, swap8(word));
-        }
-
-        last_addr += 2;
+    const uint32_t target_addr = 0;
+    bool shouldPrintBuf = false;
+    // Don't expect anything over 84MHZ to work correctly, spec sheet says that the max for for linear burst
+    uint32_t testSpeedsInMHZ[] = {1, 2, 4, 8, 16, 33, 66, 133};
+    for (int i = 0; i < count_of(testSpeedsInMHZ); i++) {
+        uint32_t speed = 1000 * 1000 * testSpeedsInMHZ[i];
+        //runTest(speed, i, target_addr, shouldPrintBuf);
+        runChunkReadTest(speed, i, 0, FLASH_PAGE_SIZE);
+        // runChunkReadTest(speed, i, 0, 2); // 2 bytes to simulate n64
     }
 
     return 0;
+#endif
 }
+
 #endif
