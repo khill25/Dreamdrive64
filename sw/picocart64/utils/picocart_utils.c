@@ -381,7 +381,7 @@ int main() {
 #define FLASH_PAGE_SIZE        1024 * 8
 
 #define FLASH_CMD_PAGE_PROGRAM 0x02
-#define FLASH_CMD_READ         0x03 // read is 0x03, fast read is 0x0B, fast read has wait cycles between sending address and read
+#define FLASH_CMD_READ         0x0B // read is 0x03, fast read is 0x0B, fast read has wait cycles between sending address and read
 #define FLASH_CMD_STATUS       0x05
 #define FLASH_CMD_WRITE_EN     0x06
 #define FLASH_CMD_SECTOR_ERASE 0x20
@@ -471,9 +471,11 @@ void printbuf(uint8_t buf[FLASH_PAGE_SIZE]) {
     }
 }
 
-void initSPI(uint32_t hz) {
+void initSPI(uint32_t hz, bool verbose) {
     // Enable SPI 0 at 1 MHz and connect to GPIOs
-    printf("Initing SPI at %dMHZ\n", hz / 1000 / 1000);
+    if (verbose) {
+        printf("Initing SPI at %dMHZ\n", hz / 1000 / 1000);
+    }
     spi_init(spi_default, hz);
     gpio_set_function(PICO_DEFAULT_SPI_RX_PIN, GPIO_FUNC_SPI);
     gpio_set_function(PICO_DEFAULT_SPI_SCK_PIN, GPIO_FUNC_SPI);
@@ -518,22 +520,16 @@ void testWriteRead(const uint32_t target_addr, uint32_t len) {
     printf("read latency %d\n", totalTime);
 }
 
-// Reads from flash in chunkSizeBytesToRead chunks.
-// Increments the address by chunkSizeBytesToRead and continues until FLASH_PAGE_SIZE has been reached
+// Reads chunkSizeBytesToRead from flash
 void runChunkReadTest(uint32_t speed, uint8_t testNumber, const uint32_t startingAddress, uint32_t chunkSizeBytesToRead) {
-    printf("Chunk Read Test %d, %dMHZ\n", testNumber, speed / 1000 / 1000);
-    initSPI(speed);
+    printf("Chunk Read Test %d, %dMHZ, %d bytes\n", testNumber, speed / 1000 / 1000, chunkSizeBytesToRead);
+    initSPI(speed, false);
 
     uint32_t readTime = 0;
     uint32_t currentAddress = startingAddress;
-    uint32_t maxReads = FLASH_PAGE_SIZE / chunkSizeBytesToRead;
-    printf("begin reading %d bytes for %d reads...\n", chunkSizeBytesToRead, maxReads);
-    uint8_t buf[2];
-    for (uint8_t i = 0; i < maxReads; i++) { 
-       readTime = testRead(currentAddress, page_buf, chunkSizeBytesToRead);
-       printf("latency %d\n", readTime);
-       currentAddress += chunkSizeBytesToRead;
-    }
+    uint8_t buf[chunkSizeBytesToRead];
+    readTime = testRead(currentAddress, buf, chunkSizeBytesToRead);
+    printf("latency %d cycles\n\n", readTime);
 
     // Rest between tests
     sleep_ms(100);
@@ -542,7 +538,7 @@ void runChunkReadTest(uint32_t speed, uint8_t testNumber, const uint32_t startin
 // This runs tests using the FLASH_PAGE_SIZE buffer
 void runTest(uint32_t speed, uint8_t testNumber, const uint32_t target_addr, bool shouldPrintBuf) {
     printf("Test %d, %dMHZ\n", testNumber, speed / 1000 / 1000);
-    initSPI(speed);
+    initSPI(speed, false);
 
     // Write 0s to the buffer to 'erase' it just to make sure we aren't running into any weirdness
     for (int i = 0; i < FLASH_PAGE_SIZE; ++i) {
@@ -584,26 +580,21 @@ int main() {
 
     sleep_ms(5000);
 
-    printf("SPI flash speed test. Read/Writes are 1KB\n"); 
-    
-    printf("A few random numbers...\n");
-    for(int i = 0; i < 5; ++i) {
-        printf("%d\n", rand() % FLASH_PAGE_SIZE);
-    }
-
+    printf("SPI flash speed test\n"); 
     // setup to use clock tick counting for more granular latency testing without an oscilloscope 
     systick_hw->csr = 0x5;
     systick_hw->rvr = 0x00FFFFFF;
 
-    const uint32_t target_addr = 0;
+    const uint32_t address = 0;
     bool shouldPrintBuf = false;
-    // Don't expect anything over 84MHZ to work correctly, spec sheet says that the max for for linear burst
-    uint32_t testSpeedsInMHZ[] = {1, 2, 4, 8, 16, 33, 66, 133};
+    uint32_t testSpeedsInMHZ[] = {16, 33, 66, 133};
+    uint32_t testChunkByteSizes[] = {2, 8, 128, 512, 1024, 1024 * 2, 1024 * 4};
     for (int i = 0; i < count_of(testSpeedsInMHZ); i++) {
         uint32_t speed = 1000 * 1000 * testSpeedsInMHZ[i];
-        //runTest(speed, i, target_addr, shouldPrintBuf);
-        runChunkReadTest(speed, i, 0, FLASH_PAGE_SIZE);
-        // runChunkReadTest(speed, i, 0, 2); // 2 bytes to simulate n64
+        //runTest(speed, i, address, shouldPrintBuf); // Run read/write tests
+        for (int k = 0; k < count_of(testChunkByteSizes); k++) {
+            runChunkReadTest(speed, i, address, testChunkByteSizes[k]);
+        }
     }
 
     return 0;
