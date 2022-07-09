@@ -17,41 +17,34 @@
 // 2 = test pico that mimics n64 bus
 // 3 = playground
 // 4 = TEST -- SPI flash code
-#define BUILD_CONFIG 4
+#define BUILD_CONFIG 3
 
 #if BUILD_CONFIG == 3
-#include "hardware/structs/systick.h"
-
 /*
+// Use this code to get number of machine cycles
+#include "hardware/structs/systick.h"
 uint32_t startTime;
 systick_hw->csr = 0x5;
 systick_hw->rvr = 0x00FFFFFF;
 startTime = systick_hw->cvr;
 printf("read latency %d", systick_hw->cvr - startTime);
 */
+
 int main() {
     stdio_init_all();
 
-    sleep_ms(5000);
+    gpio_init(26);
+    gpio_init(27);
+    gpio_set_dir(26, GPIO_OUT);
+    gpio_set_dir(27, GPIO_OUT);
+    gpio_set_pulls(26, false, false);
+    gpio_set_pulls(27, false, false);
 
-    systick_hw->csr = 0x5;
-    systick_hw->rvr = 0x00FFFFFF;
-
-    uint32_t new, old, t0, t1;
-    old=systick_hw->cvr;
-
-    t0=time_us_32();
-    sleep_us(49999);
-    new=systick_hw->cvr;
-    t1=time_us_32();
-
-    // printf("\n          old-new=%d\n",old-new);
-    // printf("            t1-t0=%d\n",t1-t0);
-    // printf("(old-new)/(t1-t0)=%.1f\n",(old-new)/(t1-t0*1.0));
-    // printf("(t1-t0)/(old-new)=%.7f\n",1e3*(t1-t0)/(old-new));
-
-    while(true) {
-        
+    bool b = 0;
+    for(int i = 0; i < 10000000; i++) {
+        gpio_put(26, b);
+        gpio_put(27, !b);
+        b = !b;
     }
 
     return 0;
