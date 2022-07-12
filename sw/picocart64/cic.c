@@ -1,14 +1,16 @@
+/**
+ * SPDX-License-Identifier: MIT License
+ *
+ * Copyright (c) 2019 Jan Goldacker
+ * Copyright (c) 2021-2022 Konrad Beckmann <konrad.beckmann@gmail.com>
+ */
+
 /*
 
-This file is part of ECPKart64.
-
-Copyright (c) 2019 Jan Goldacker
-Copyright (c) 2021-2022 Konrad Beckmann <konrad.beckmann@gmail.com>
+This file is part of PicoCart64.
 
 This is a port of:
 https://github.com/jago85/UltraCIC_C/blob/master/cic_c.c
-
-SPDX-License-Identifier: MIT License
 
 Generic CIC implementation for N64
 ----------------------------------------------------------
@@ -22,16 +24,19 @@ Hardware connections
 Data Clock Input (DCLK): CIC Pin 14
 Data Line, Bidir (DIO):  CIC Pin 15
 
-
-
 */
 
 #include <stdio.h>
 #include <string.h>
+
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 
 #include "cic.h"
+#include "sram.h"
 #include "picocart64_pins.h"
 
 
@@ -41,6 +46,7 @@ Data Line, Bidir (DIO):  CIC Pin 15
 #define REGION_PAL  (1)
 
 #define GET_REGION() (REGION_PAL)
+// #define GET_REGION() (REGION_NTSC)
 
 /* SEEDs */
 
@@ -134,7 +140,8 @@ static unsigned char ReadBit(void)
     // wait for DCLK to go low
     do {
         vin = gpio_get(N64_CIC_DCLK);
-    } while ((vin & 1) && check_running());
+        vPortYield();
+    } while (vin && check_running());
 
     // Read the data bit
     res = gpio_get(N64_CIC_DIO);
@@ -142,7 +149,8 @@ static unsigned char ReadBit(void)
     // wait for DCLK to go high
     do {
         vin = gpio_get(N64_CIC_DCLK);
-    } while (((vin & 1) == 0) && check_running());
+        vPortYield();
+    } while ((!vin) && check_running());
 
     return res ? 1 : 0;
 }
@@ -154,7 +162,8 @@ static void WriteBit(unsigned char b)
     // wait for DCLK to go low
     do {
         vin = gpio_get(N64_CIC_DCLK);
-    } while ((vin & 1) && check_running());
+        vPortYield();
+    } while (vin && check_running());
 
     if (b == 0)
     {
@@ -166,7 +175,8 @@ static void WriteBit(unsigned char b)
     // wait for DCLK to go high
     do {
         vin = gpio_get(N64_CIC_DCLK);
-    } while (((vin & 1) == 0) && check_running());
+        vPortYield();
+    } while ((!vin) && check_running());
 
     // Disable output
     gpio_set_dir(N64_CIC_DIO, GPIO_IN);
@@ -493,17 +503,11 @@ static void cic_run(void)
     memset(_CicMem, 0, sizeof(_CicMem));
     memset(_6105Mem, 0, sizeof(_6105Mem));
 
-    gpio_init(N64_CIC_DCLK);
-    gpio_init(N64_CIC_DIO);
-    gpio_init(N64_COLD_RESET);
-
-    gpio_pull_up(N64_CIC_DIO);
-
-    printf("CIC Emulator core running!\r\n");
+    // printf("CIC Emulator core running!\r\n");
 
     // Wait for reset to be released
     while (gpio_get(N64_COLD_RESET) == 0) {
-        tight_loop_contents();
+        vPortYield();
     }
 
     // read the region setting
@@ -511,8 +515,9 @@ static void cic_run(void)
 
     // send out the corresponding id
     unsigned char hello = 0x1;
-    if (isPal)
+    if (isPal) {
         hello |= 0x4;
+    }
 
     // printf("W: %02X\n", hello);
     WriteNibble(hello);
@@ -530,8 +535,8 @@ static void cic_run(void)
     _CicMem[0x01] = ReadNibble();
     _CicMem[0x11] = ReadNibble();
 
-    while(check_running())
-    {
+    while (check_running()) {
+        vPortYield();
         // read mode (2 bit)
         unsigned char cmd = 0;
         cmd |= (ReadBit() << 1);
@@ -563,7 +568,20 @@ static void cic_run(void)
 
 void cic_main(void)
 {
+    // Load SRAM backup from external flash
+    // TODO: How do we detect if it's uninitialized (config area in flash?),
+    //       or maybe we don't have to care?
+    sram_load_from_flash();
+
     while (1) {
         cic_run();
+
+        // cic_run returns when N64_CR goes low, i.e.
+        // user presses the reset button, or the N64 loses power.
+
+        // Commit SRAM to flash
+        sram_save_to_flash();
+
+        vPortYield();
     }
 }

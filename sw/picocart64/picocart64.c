@@ -1,34 +1,24 @@
 /**
- * Copyright (c) 2022 Konrad Beckmann
+ * SPDX-License-Identifier: BSD-2-Clause
  *
- * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2022 Konrad Beckmann
  */
 
 #include <stdio.h>
 #include <string.h>
 
-#include "pico/stdlib.h"
-#include "pico/stdio.h"
-#include "pico/multicore.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
-#include "n64_pi.pio.h"
+#include "pico/stdlib.h"
+#include "pico/multicore.h"
+#include "hardware/irq.h"
 
 #include "cic.h"
 #include "picocart64_pins.h"
-
-// The rom to load in normal .z64, big endian, format
-#include "rom.h"
-const uint16_t *rom_file_16 = (uint16_t *) rom_file;
-
-#define SRAM_256KBIT_SIZE         0x00008000
-#define SRAM_768KBIT_SIZE         0x00018000
-#define SRAM_1MBIT_SIZE           0x00020000
-
-uint32_t SRAM[SRAM_1MBIT_SIZE / sizeof(uint32_t)];
-uint16_t *SRAM_16 = (uint16_t *) SRAM;
-
-
-#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#include "picocart64.h"
+#include "utils.h"
+#include "n64_pi.h"
 
 #define PICO_LA1    (26)
 #define PICO_LA2    (27)
@@ -38,33 +28,18 @@ uint16_t *SRAM_16 = (uint16_t *) SRAM;
 #define UART_ID     uart0
 #define BAUD_RATE   115200
 
+#define ENABLE_N64_PI 1
 
-static inline uint32_t swap16(uint32_t value)
-{
-    // 0x11223344 => 0x33441122
-    return (value << 16) | (value >> 16);
-}
+// Priority 0 = lowest, 31 = highest
+#define CIC_TASK_PRIORITY     (tskIDLE_PRIORITY + 1UL)
+#define SECOND_TASK_PRIORITY  (tskIDLE_PRIORITY + 2UL)
 
-static inline uint32_t swap8(uint16_t value)
-{
-    // 0x1122 => 0x2211
-    return (value << 8) | (value >> 8);
-}
 
-static inline uint32_t resolve_sram_address(uint32_t address)
-{
-    uint32_t bank = (address >> 18) & 0x3;
-    uint32_t resolved_address;
+static StaticTask_t cic_task;
+static StaticTask_t second_task;
+static StackType_t  cic_task_stack[4 * 1024 / sizeof(StackType_t)];
+static StackType_t  second_task_stack[4 * 1024 / sizeof(StackType_t)];
 
-    if (bank) {
-        resolved_address = address & (SRAM_256KBIT_SIZE - 1);
-        resolved_address |= bank << 15;
-    } else {
-        resolved_address = address & (sizeof(SRAM) - 1);
-    }
-
-    return resolved_address;
-}
 
 /*
 
@@ -72,129 +47,116 @@ Profiling results:
 
 Time between ~N64_READ and bit output on AD0
 
-With constant data fetched from C-code (no memory access)
---------------------------------------
-133 MHz: 240 ns
-150 MHz: 230 ns
-200 MHz: 230 ns
-250 MHz: 190 ns
+133 MHz old code:
+    ROM:  1st _980_ ns, 2nd 500 ns
+    SRAM: 1st  500  ns, 2nd 510 ns
 
+133 MHz new code:
+    ROM:  1st _300_ ns, 2nd 280 ns
+    SRAM: 1st  320  ns, 2nd 320 ns
 
-With uncached data from external flash
---------------------------------------
-133 MHz: 780 ns
-150 MHz: 640 ns
-200 MHz: 480 ns
-250 MHz: 390 ns
-
-
+266 MHz new code:
+    ROM:  1st  180 ns, 2nd 180 ns (sometimes down to 160, but only worst case matters)
+    SRAM: 1st  160 ns, 2nd 160 ns
 
 */
+
+
+// FreeRTOS boilerplate
+void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer,
+                                    StackType_t **ppxTimerTaskStackBuffer,
+                                    uint32_t *pulTimerTaskStackSize)
+{
+    static StaticTask_t xTimerTaskTCB;
+    static StackType_t uxTimerTaskStack[ configTIMER_TASK_STACK_DEPTH ];
+
+    *ppxTimerTaskTCBBuffer = &xTimerTaskTCB;
+    *ppxTimerTaskStackBuffer = uxTimerTaskStack;
+    *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
+}
+
+void cic_task_entry(__unused void *params)
+{
+    printf("cic_task_entry\n");
+
+    cic_main();
+}
+
+void second_task_entry(__unused void *params)
+{
+    uint32_t count = 0;
+
+    printf("second_task_entry\n");
+
+    while (true) {
+        vTaskDelay(1000);
+        count++;
+
+        // Set to 1 to print stack watermarks.
+        // Printing is synchronous and interferes with the CIC emulation.
+#if 0
+        // printf("Second task heartbeat: %d\n", count);
+        // vPortYield();
+
+        if (count > 10) {
+            printf("watermark: %d\n", uxTaskGetStackHighWaterMark(NULL));
+            vPortYield();
+
+            printf("watermark second_task: %d\n", uxTaskGetStackHighWaterMark((TaskHandle_t) &second_task));
+            vPortYield();
+
+            printf("watermark cic_task: %d\n", uxTaskGetStackHighWaterMark((TaskHandle_t) &cic_task));
+            vPortYield();
+        }
+#endif
+
+    }
+}
+
+void vLaunch(void)
+{
+    xTaskCreateStatic(cic_task_entry,    "CICThread",    configMINIMAL_STACK_SIZE, NULL, CIC_TASK_PRIORITY,    cic_task_stack,    &cic_task);
+    xTaskCreateStatic(second_task_entry, "SecondThread", configMINIMAL_STACK_SIZE, NULL, SECOND_TASK_PRIORITY, second_task_stack, &second_task);
+
+    /* Start the tasks and timer running. */
+    vTaskStartScheduler();
+}
 
 int main(void)
 {
     // Overclock!
-    // Note that the Pico's external flash is rated to 133MHz,
-    // not sure if the flash speed is based on this clock.
+    // The external flash should be rated to 133MHz,
+    // but since it's used with a 2x clock divider,
+    // 266 MHz is safe in this regard.
 
-    // set_sys_clock_khz(PLL_SYS_KHZ, true);
-    // set_sys_clock_khz(150000, true); // Does not work
-    // set_sys_clock_khz(200000, true); // Does not work
-    // set_sys_clock_khz(250000, true); // Does not work
-    // set_sys_clock_khz(300000, true); // Doesn't even boot
-    // set_sys_clock_khz(400000, true); // Doesn't even boot
+    // set_sys_clock_khz(133000, true);
+    set_sys_clock_khz(266000, true); // Required for SRAM @ 200ns
 
-    // stdio_init_all();
-
+    // Init GPIOs before starting the second core and FreeRTOS
     for (int i = 0; i <= 27; i++) {
         gpio_init(i);
         gpio_set_dir(i, GPIO_IN);
         gpio_set_pulls(i, false, false);
     }
 
-    gpio_init(N64_CIC_DCLK);
-    gpio_init(N64_CIC_DIO);
-    gpio_init(N64_COLD_RESET);
-
+    // Enable pull up on N64_CIC_DIO since there is no external one.
     gpio_pull_up(N64_CIC_DIO);
 
     // Init UART on pin 28/29
     stdio_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
-    printf("PicoCart64 Booting!\r\n");
+    printf("PicoCart64 Boot\r\n");
 
-    // Init PIO before starting the second core
-    PIO pio = pio0;
-    uint offset = pio_add_program(pio, &n64_pi_program);
-    n64_pi_program_init(pio, 0, offset);
-    pio_sm_set_enabled(pio, 0, true);
-
-    // Launch the CIC emulator in the second core
+#if ENABLE_N64_PI
+    // Launch the N64 PI implementation in the second core
     // Note! You have to power reset the pico after flashing it with a jlink,
     //       otherwise multicore doesn't work properly.
     //       Alternatively, attach gdb to openocd, run `mon reset halt`, `c`.
     //       It seems this works around the issue as well.
-    multicore_launch_core1(cic_main);
+    multicore_launch_core1(n64_pi_run);
+#endif
 
-    // Wait for reset to be released
-    while (gpio_get(N64_COLD_RESET) == 0) {
-        tight_loop_contents();
-    }
-
-    uint32_t n64_addr = 0;
-    uint32_t n64_addr_h = 0;
-    uint32_t n64_addr_l = 0;
-
-    uint32_t last_addr = 0;
-    uint32_t get_msb = 0;
-
-    while (1) {
-        uint32_t addr = swap16(pio_sm_get_blocking(pio, 0));
-
-        if (addr & 0x00000001) {
-            // We got a WRITE
-            // 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-            if (last_addr >= 0x08000000 && last_addr <= 0x0FFFFFFF) {
-                SRAM_16[resolve_sram_address(last_addr) >> 1] = addr >> 16;
-            }
-            last_addr += 2;
-            continue;
-        }
-
-        if (addr != 0) {
-            // We got a start address
-            last_addr = addr;
-            get_msb = 1;
-            continue;
-        }
-
-        // We got a "Give me next 16 bits" command
-        uint32_t word;
-        if (last_addr == 0x10000000) {
-            // Configure bus to run slowly.
-            // This is better patched in the rom, so we won't need a branch here.
-            // But let's keep it here so it's easy to import roms easily.
-            // 0x8037FF40 in big-endian
-            word = 0x8037;
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr == 0x10000002) {
-            // Configure bus to run slowly.
-            // This is better patched in the rom, so we won't need a branch here.
-            // But let's keep it here so it's easy to import roms easily.
-            // 0x8037FF40 in big-endian
-            word = 0xFF40;
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr >= 0x08000000 && last_addr <= 0x0FFFFFFF) {
-            // Domain 2, Address 2 Cartridge SRAM
-            word = SRAM_16[resolve_sram_address(last_addr) >> 1];
-            pio_sm_put_blocking(pio, 0, word);
-        } else if (last_addr >= 0x10000000 && last_addr <= 0x1FBFFFFF) {
-            // Domain 1, Address 2 Cartridge ROM
-            word = rom_file_16[(last_addr & 0xFFFFFF) >> 1];
-            pio_sm_put_blocking(pio, 0, swap8(word));
-        }
-
-        last_addr += 2;
-    }
+    // Start FreeRTOS on Core0
+    vLaunch();
 
     return 0;
 }
