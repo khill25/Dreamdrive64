@@ -112,3 +112,6 @@ build/
 *.elf
 *.bin
 *.o
+Makefile
+.libdragon/config.json
+src/main.c
