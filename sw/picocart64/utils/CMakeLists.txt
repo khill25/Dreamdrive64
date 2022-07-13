@@ -23,7 +23,7 @@ pico_sdk_init()
 
 # Build pio
 pico_generate_pio_header(picocart_utils ${CMAKE_CURRENT_LIST_DIR}/n64_data_tester.pio)
-pico_generate_pio_header(picocart_utils ${CMAKE_CURRENT_LIST_DIR}/n64_data_control.pio)
+#pico_generate_pio_header(picocart_utils ${CMAKE_CURRENT_LIST_DIR}/n64_data_control.pio)
  
 # Enable USB, and DISABLE UART output
 pico_enable_stdio_usb(picocart_utils 1)

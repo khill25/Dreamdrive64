@@ -9,17 +9,7 @@
 #include "hardware/pio.h"
 
 #include "picocart64_pins.h"
-// todo include some kind of data or rom file header
 
-// Build cofig
-// 0 = simple test program
-// 1 = picocart64 ("master") pico 
-// 2 = test pico that mimics n64 bus
-// 3 = playground
-// 4 = TEST -- SPI flash code
-#define BUILD_CONFIG 3
-
-#if BUILD_CONFIG == 3
 /*
 // Use this code to get number of machine cycles
 #include "hardware/structs/systick.h"
@@ -29,6 +19,16 @@ systick_hw->rvr = 0x00FFFFFF;
 startTime = systick_hw->cvr;
 printf("read latency %d", systick_hw->cvr - startTime);
 */
+
+// Build cofig
+// 0 = simple flash test program
+// 1 = picocart64 ("master") pico 
+// 2 = test pico that mimics n64 bus
+// 3 = playground
+// 4 = TEST -- SPI flash code
+#define BUILD_CONFIG 2
+
+#if BUILD_CONFIG == 3
 
 int main() {
     stdio_init_all();
@@ -215,14 +215,14 @@ int main() {
  */
 #if BUILD_CONFIG == 2
 #include "hardware/clocks.h"
-#include "n64_data_control.pio.h"
+// #include "n64_data_control.pio.h"
 #include "n64_data_tester.pio.h"
 #include "rom.h"
 
 #define CONTROL_SM 0
 #define DATA_SM 0
 PIO pio;
-static const float pio_freq = 1024;//31250000;
+static const float pio_freq = 1024 * 1024;//31250000;
 
 #define BAD_DATA_ADDRESS 0
 #define BAD_DATA_VALUE 1
@@ -236,7 +236,8 @@ static inline uint32_t swap16(uint32_t value) {
 }
 
 void sendAddress(uint32_t address) {
-    pio_sm_put_blocking(pio, DATA_SM, swap16(address));
+    // uint32_t swappedAddress = swap16(address); // let's try without swapping
+    pio_sm_put_blocking(pio, DATA_SM, address);
 }
 
 void verifyData(uint32_t data, uint32_t address, uint32_t index) {
@@ -248,6 +249,13 @@ void verifyData(uint32_t data, uint32_t address, uint32_t index) {
         badData[index][BAD_DATA_ISBAD] = 1;
         hasBadData = true;
     }
+}
+
+static inline void wait(int cycles) {
+    do {
+        asm volatile("nop");
+        --cycles;
+    } while (cycles > 0);
 }
 
 int main() {
@@ -270,94 +278,119 @@ int main() {
         gpio_pull_down(i);
     }
 
-    for(int i = 0; i < 1000; i++) {
-        gpio_put(N64_READ, true);
-        gpio_put(N64_ALEH, true);
-        gpio_put(N64_ALEL, true);
-        sleep_ms(1);
-        gpio_put(N64_READ, false);
-        gpio_put(N64_ALEH, false);
-        gpio_put(N64_ALEL, false);
-        sleep_ms(1);
-    }
-
-    sleep_ms(1000);
     printf("Initializing...\n");
+    gpio_init(25);
+    gpio_set_dir(25, GPIO_OUT);
+    gpio_put(25, 1);
 
     // Init PIO
     pio = pio0;
 
-    // Calculate the PIO clock divider
+    // Calculate the PIO clock divider so we don't need so many noops
     float clockDivider = (float)clock_get_hz(clk_sys) / pio_freq;
+    // float clockDivider = 3.f;
 
     // data control state machine
-    uint offset = pio_add_program(pio, &n64_data_control_program);
-    n64_data_control_program_init(pio, CONTROL_SM, offset, clockDivider);
+    // uint offset = pio_add_program(pio, &n64_data_control_program);
+    // n64_data_control_program_init(pio, CONTROL_SM, offset, clockDivider);
     
     // // data io state machine
-    offset = pio_add_program(pio, &n64_data_tester_program);
+    uint offset = pio_add_program(pio, &n64_data_tester_program);
     n64_data_tester_program_init(pio, DATA_SM, offset, clockDivider);
 
     // might need to add this for pios using `set`
     //pio_sm_set_set_pins(pio, 0, 16, 4);
 
-    printf("Enabling PIO programs...\n");
+    gpio_put(22, 1); // N64_RESET high, means we are good to go!
 
-    pio_sm_set_enabled(pio, CONTROL_SM, true);
+    //pio_sm_set_enabled(pio, CONTROL_SM, true);
     pio_sm_set_enabled(pio, DATA_SM, true);
-    printf("PIO programs enabled!\n");
 
-    uint32_t currentAddress = 0x10000000;//0x10000000;
+    const int pioIRQ = 0;
+    const int lowDelayCounter = 6 * 3 * 6;
+    const int highLowCounter = 3 * 3 * 6;
+    const int stayLowBeforeHighCounter = 12 * 3 * 6;
+    const int delayBeforeReadLowCounter = 64 * 3 * 6;
+    const uint32_t START_ADDRESS = 0x0000100A;
+    uint32_t currentAddress = START_ADDRESS;
     while(true) {
+        gpio_put(N64_ALEH, 1);
+        gpio_put(N64_ALEL, 1);
+
+        // Wait for before setting signal line low
+        wait(lowDelayCounter);
+
+        pio_sm_exec(pio, 0, pio_encode_irq_set(false, pioIRQ));
+
         // Now we can send the address that we want to read from
         sendAddress(currentAddress);
-        currentAddress += 2;
 
-        if (currentAddress > 0x40000000) {
-            currentAddress = 0x10000000;
+        // Set high address line low and send first half of address
+        gpio_put(N64_ALEH, 0);
+        wait(lowDelayCounter);
+
+        // Send second half of address by telling cart to expect it
+        gpio_put(N64_ALEL, 0);
+        pio_sm_exec(pio, 0, pio_encode_irq_set(false, pioIRQ));
+
+        // Wait for the rest of the lower address to be sent
+        wait(lowDelayCounter);
+
+        // Tell pio to flip it's pins and start to read data
+        pio_sm_exec(pio, 0, pio_encode_irq_set(false, pioIRQ));
+
+        // read data from bus until we have read 256 words of data (256 reads) 512 bytes
+        printf("Reading 512 bytes of data...\n"); 
+        for (uint16_t i = 0; i < 256; i++) {
+            // tell cartridge we are ready to read data
+            gpio_put(N64_READ, false);
+
+            // read the data
+            gpio_put(25, 0);
+            uint32_t data = pio_sm_get_blocking(pio, DATA_SM);
+            gpio_put(25, 1);
+            
+            // Tell PIO to expect more data
+            pio_sm_exec(pio, 0, pio_encode_irq_set(false, pioIRQ));
+
+            // verify data
+            verifyData(data, currentAddress, i);
+
+            currentAddress += 2; // increment current address by 2 bytes each loop
+
+            gpio_put(N64_READ, true);
+
+            wait(delayBeforeReadLowCounter);
         }
 
-        // // read data from bus until we have read 256 words of data (256 reads)
-        // for (uint16_t i = 0; i < 256; i++) {
-        //     sleep_ms(1000);
-        //     gpio_put(N64_READ, true);
-        //     sleep_ms(100);
-        //     printf("waiting for data...\n");
-        //     uint32_t data = pio_sm_get_blocking(pio, DATA_SM);
-            
-        //     // verify data
-        //     verifyData(data, currentAddress, i);
+        gpio_put(25, 1);
+        printf("Reading finished!\n");
+        if (hasBadData) {
+            printf("Bad data detected\n\n\n");
+            for (int i = 0; i < 256; i++) {
+                if (badData[i][BAD_DATA_ISBAD] == 1) {
+                    printf("%#10x: %#04x, ", badData[i][BAD_DATA_ADDRESS], badData[i][BAD_DATA_VALUE]);
+                }
 
-        //     currentAddress += 2; // increment current address by 2 bytes each loop
-            
-        //     gpio_put(N64_READ, false);
-        // }
+                // while we are here, clear any state so we can use this again
+                badData[i][BAD_DATA_ADDRESS] = 0;
+                badData[i][BAD_DATA_VALUE] = 0;
+                badData[i][BAD_DATA_ISBAD] = 0;
+            }
+        } else {
+            printf("No bad data detected!\n");
+        }
 
-        // if (hasBadData) {
-        //     printf("Bad data detected\n\n\n");
-        //     for (int i = 0; i < 256; i++) {
-        //         if (badData[i][BAD_DATA_ISBAD] == 1) {
-        //             printf("%#10x: %#04x, ", badData[i][BAD_DATA_ADDRESS], badData[i][BAD_DATA_VALUE]);
-        //         }
+        // reset the bad data flag as we go for another pass
+        hasBadData = false;
 
-        //         // while we are here, clear any state so we can use this again
-        //         badData[i][BAD_DATA_ADDRESS] = 0;
-        //         badData[i][BAD_DATA_VALUE] = 0;
-        //         badData[i][BAD_DATA_ISBAD] = 0;
-        //     }
-        // } else {
-        //     printf("No bad data detected!\n");
-        // }
-
-        // // reset the bad data flag as we go for another pass
-        // hasBadData = false;
-
-        // // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
-        // // pio_sm_restart(pio, CONTROL_SM);
+        // restart both state machines so we can get more data for a different address offset (or just keep looping on the same data)
+        // pio_sm_restart(pio, CONTROL_SM);
         // pio_sm_restart(pio, DATA_SM);
+        pio_sm_exec(pio, 0, pio_encode_jmp(offset + 0));
 
-        // // reset the current address, just keep looping over the same 256 words
-        // currentAddress = 0x10000000;
+        // reset the current address, just keep looping over the same 256 words
+        currentAddress = START_ADDRESS;
     }
 
     return 0;

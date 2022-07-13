@@ -20,7 +20,8 @@
 ; Not sure if you can/how to share defines across pio files
 ; so duplicate the defines here and weep
 .define public DATA_SM_SIGNAL 4
-.define public CONTROL_SM_SIGNAL 5
+; was 5 now 0
+.define public CONTROL_SM_SIGNAL 0 
 
 .program n64_data_tester
 
@@ -31,9 +32,9 @@ mov osr, ~null
 out pindirs, 32
 
 ;; Do this from C before we send data
-wait 0 irq CONTROL_SM_SIGNAL 
+wait 1 irq CONTROL_SM_SIGNAL 
 
-; send address we want from the cartridge
+; get address from C so we can get data from the cartridge 
 pull
 
 send_upper:
@@ -41,14 +42,14 @@ send_upper:
 out pins, 16; will consume first 16 bits (high address)
 
 ; wait for ALE_L -> low signal from control sm that address line has changed 
-wait 0 irq CONTROL_SM_SIGNAL
+wait 1 irq CONTROL_SM_SIGNAL
 send_lower:
 
 ; send the low address portion
 out pins, 16; consume the last 16 bits (low address)
 
 ; wait for control to tell us we can read data
-wait 0 irq CONTROL_SM_SIGNAL
+wait 1 irq CONTROL_SM_SIGNAL
 
 init_input:
 ; flip pins to input
@@ -58,8 +59,9 @@ out pindirs, 32
 ; read 16 bits of data (a word)
 ; and wait pulse the input via signals from data sm
 read_data:
-    in pins, 16 ; send data
-    wait 0 irq CONTROL_SM_SIGNAL ; wait before sending more
+    in pins, 16 ; get data
+    push
+    wait 1 irq CONTROL_SM_SIGNAL ; wait before sending more
     ; if we want to get another address, we should restart both state machines
 jmp read_data
 
