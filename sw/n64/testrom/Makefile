@@ -10,6 +10,7 @@ LD = $(GCCN64PREFIX)ld
 OBJCOPY = $(GCCN64PREFIX)objcopy
 N64TOOL = $(ROOTDIR)/bin/n64tool
 CHKSUM64 = $(ROOTDIR)/bin/chksum64
+MKDFS = $(ROOTDIR)/bin/mkdfs
 
 C_SOURCES = \
 	$(wildcard *.c) \
@@ -26,7 +27,7 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 ASFLAGS = -mtune=vr4300 -march=vr4300
 CFLAGS = -std=gnu99 -march=vr4300 -mtune=vr4300 -Wall $(C_INCLUDES)
 LDFLAGS = -L$(ROOTDIR)/mips64-elf/lib -ldragon -lc -lm -ldragonsys -Tn64.ld --gc-sections
-N64TOOLFLAGS = -l 1M -h $(ROOTDIR)/mips64-elf/lib/header -t "PicoCart64 Test ROM"
+N64TOOLFLAGS = -l 1536K -h $(ROOTDIR)/mips64-elf/lib/header -t "PicoCart64 Test ROM"
 
 all: $(BUILD_DIR)/$(PROG_NAME).z64
 
@@ -34,8 +35,8 @@ all: $(BUILD_DIR)/$(PROG_NAME).z64
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 	$(CC) -o $@ $< -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) 
 
-$(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin
-	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $^
+$(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin $(BUILD_DIR)/$(PROG_NAME).dfs
+	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
 	$(CHKSUM64) $@
 
 $(BUILD_DIR)/$(PROG_NAME).bin: $(BUILD_DIR)/$(PROG_NAME).elf
@@ -43,6 +44,9 @@ $(BUILD_DIR)/$(PROG_NAME).bin: $(BUILD_DIR)/$(PROG_NAME).elf
 
 $(BUILD_DIR)/$(PROG_NAME).elf: $(OBJECTS)
 	$(LD) -o $@ $^ $(LDFLAGS)
+
+$(BUILD_DIR)/$(PROG_NAME).dfs: $(wildcard filesystem/*)
+	$(MKDFS) $@ filesystem
 
 $(PROG_NAME).c:
 	echo -n "#define GIT_REV 0x" > git_info.h
@@ -54,4 +58,4 @@ $(BUILD_DIR):
 
 .PHONY: clean
 clean:
-	rm -f *.v64 *.z64 *.bin *.elf *.o
+	rm -f *.v64 *.z64 *.bin *.elf *.o *.dfs
