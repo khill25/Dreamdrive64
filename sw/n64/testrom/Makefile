@@ -11,6 +11,14 @@ OBJCOPY = $(GCCN64PREFIX)objcopy
 N64TOOL = $(ROOTDIR)/bin/n64tool
 CHKSUM64 = $(ROOTDIR)/bin/chksum64
 MKDFS = $(ROOTDIR)/bin/mkdfs
+ECHO = echo
+
+# To enable verbose prints, set VERBOSE=1 when building:
+#   make VERBOSE=1
+ifneq ($(strip $(VERBOSE)),1)
+V = @
+endif
+
 
 C_SOURCES = \
 	$(wildcard *.c) \
@@ -18,7 +26,7 @@ C_SOURCES = \
 
 C_INCLUDES = \
 	-I$(ROOTDIR)/mips64-elf/include \
-	-I. \
+	-I$(BUILD_DIR) \
 	-I../../picocart64_shared/include \
 
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
@@ -33,29 +41,32 @@ all: $(BUILD_DIR)/$(PROG_NAME).z64
 
 
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
-	$(CC) -o $@ $< -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) 
+	$(V)$(ECHO) "[  CC ]" $(notdir $<)
+	$(V)$(CC) -o $@ $< -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) 
 
 $(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin $(BUILD_DIR)/$(PROG_NAME).dfs
-	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
-	$(CHKSUM64) $@
+	$(V)$(ECHO) "[ Z64 ]" $(notdir $@)
+    $(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
+	$(V)$(ECHO) "[ CHK ]" $(notdir $@)
+	$(V)$(CHKSUM64) $@
 
 $(BUILD_DIR)/$(PROG_NAME).bin: $(BUILD_DIR)/$(PROG_NAME).elf
-	$(OBJCOPY) $< $@ -O binary
-
-$(BUILD_DIR)/$(PROG_NAME).elf: $(OBJECTS)
-	$(LD) -o $@ $^ $(LDFLAGS)
+	$(V)$(ECHO) "[ BIN ]" $(notdir $@)
+	$(V)$(OBJCOPY) $< $@ -O binary
 
 $(BUILD_DIR)/$(PROG_NAME).dfs: $(wildcard filesystem/*)
-	$(MKDFS) $@ filesystem
+    $(MKDFS) $@ filesystem
 
-$(PROG_NAME).c:
-	echo -n "#define GIT_REV 0x" > git_info.h
-	git rev-parse --short=8 HEAD >> git_info.h
-.PHONY: $(PROG_NAME).c
+$(BUILD_DIR)/$(PROG_NAME).elf: $(OBJECTS)
+	$(V)$(ECHO) "[  LD ]" $(notdir $@)
+	$(V)$(LD) -o $@ $^ $(LDFLAGS)
 
 $(BUILD_DIR):
-	mkdir $@
+	$(V)mkdir -p $@
+	$(V)echo -n "#define GIT_REV 0x" > $(BUILD_DIR)/git_info.h
+	$(V)git rev-parse --short=8 HEAD >> $(BUILD_DIR)/git_info.h
+.PHONY: $(BUILD_DIR)
 
 .PHONY: clean
 clean:
-	rm -f *.v64 *.z64 *.bin *.elf *.o *.dfs
+	rm -rf ./build

@@ -38,29 +38,6 @@ const int BOTTOM_BAR_Y = SCREEN_HEIGHT - BOTTOM_BAR_HEIGHT;
 sprite_t *a_button_icon;
 
 /* Colors */
-<<<<<<< Updated upstream
-color_t MENU_BAR_COLOR = {.r = 0x82,.g = 0x00,.b = 0x2E,.a = 0x00 };	// 0x82002E, Berry
-color_t SELECTION_COLOR = {.r = 0x00,.g = 0x67,.b = 0xC7,.a = 0x00 };	// 0x0067C7, Bright Blue
-
-/* Assume default font size*/
-static int calculate_num_rows_per_page(void)
-{
-	// ---top of screen---
-	// menu bar
-	// padding + more files above indicator space
-	// list of files...
-	// ...
-	// more file indicator space
-	// ---bottom of screen---
-
-	// Start by subtracting the menu bar height, and paddings from the total height
-	int availableHeight = SCREEN_HEIGHT - MENU_BAR_HEIGHT - (ROW_HEIGHT * 2);
-
-	// Since there is currently no other dynamic portion, we can use a simple calculation to find rows that will fit in the space
-	int rows = availableHeight / ROW_HEIGHT;
-
-	return rows;
-=======
 color_t MENU_BAR_COLOR = { .r = 0x82, .g = 0x00, .b = 0x2E, .a = 0x00 }; // 0x82002E, Berry
 color_t BOTTOM_BAR_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x55 }; // 0x82002E, Berry
 color_t SELECTION_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
@@ -82,7 +59,6 @@ static int calculate_num_rows_per_page(void) {
     int rows = availableHeight / ROW_HEIGHT;
 
     return rows;
->>>>>>> Stashed changes
 }
 
 /*
@@ -129,16 +105,6 @@ static void render_list(display_context_t display, char *list[], int currently_s
 	}
 }
 
-<<<<<<< Updated upstream
-static void draw_header_bar(display_context_t display, int fileCount)
-{
-	int x = 0, y = 0, width = SCREEN_WIDTH, height = MENU_BAR_HEIGHT;
-	graphics_draw_box(display, x, y, width, height, graphics_convert_color(MENU_BAR_COLOR));
-
-	char menuHeaderBuffer[100];
-	sprintf(menuHeaderBuffer, "PicoCart64 OS (git rev %08x)\t\t\t\t%d Files", GIT_REV, fileCount);
-	graphics_draw_text(display, MARGIN_PADDING, y + 4, menuHeaderBuffer);
-=======
 static void draw_header_bar(display_context_t display, int fileCount) {
     int x = 0, y = 0, width = SCREEN_WIDTH, height = MENU_BAR_HEIGHT;
     graphics_draw_box(display, x, y, width, height, graphics_convert_color(MENU_BAR_COLOR));
@@ -152,7 +118,6 @@ static void draw_bottom_bar(display_context_t display) {
     graphics_draw_box_trans(display, 0, BOTTOM_BAR_Y, SCREEN_WIDTH, BOTTOM_BAR_HEIGHT, graphics_convert_color(BOTTOM_BAR_COLOR));
     graphics_draw_sprite_trans(display, MARGIN_PADDING, BOTTOM_BAR_Y, a_button_icon);
     graphics_draw_text(display, MARGIN_PADDING + 32, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Load ROM");
->>>>>>> Stashed changes
 }
 
 /*
@@ -216,32 +181,6 @@ static void show_list(void)
 
 		if ((mag > 0 && currently_selected + mag < NUM_ENTRIES) || (mag < 0 && currently_selected > 0)) {
 			currently_selected += mag;
-<<<<<<< Updated upstream
-		}
-		// If we have moved the cursor to an entry not yet visible on screen, move first_visible as well
-		if ((mag > 0 && currently_selected >= (first_visible + max_on_screen)) || (mag < 0 && currently_selected < first_visible && currently_selected >= 0)) {
-			first_visible += mag;
-		}
-
-		/* A little debug text at the bottom of the screen */
-		char debugTextBuffer[100];
-		snprintf(debugTextBuffer, 100, "currently_selected=%d, first_visible=%d, max_per_page=%d", currently_selected, first_visible, max_on_screen);
-		graphics_draw_text(display, 5, 230, debugTextBuffer);
-
-		/* Force the backbuffer flip */
-		display_show(display);
-	}
-}
-
-void start_shell(void)
-{
-	/* Init the screen and controller */
-	display_init(RESOLUTION_512x240, DEPTH_16_BPP, 3, GAMMA_NONE, ANTIALIAS_RESAMPLE);
-	controller_init();
-
-	/* Starts the shell by rendering the list of files from the SD card */
-	show_list();
-=======
         }
 
         // If we have moved the cursor to an entry not yet visible on screen, move first_visible as well
@@ -278,7 +217,8 @@ void start_shell(void) {
     
     int ret = dfs_init(DFS_DEFAULT_LOCATION);
     if (ret != DFS_ESUCCESS) {
-        printf("Unable to init filesystem. ret: %d", ret);
+        printf("Unable to init filesystem. ret: %d\n", ret);
+		printf("git rev %08x\n", GIT_REV);
     } else {
         /* Load sprites for shell from the filesystem */
         init_sprites();
@@ -286,5 +226,4 @@ void start_shell(void) {
         /* Starts the shell by rendering the list of files from the SD card*/
         show_list();
     }
->>>>>>> Stashed changes
 }

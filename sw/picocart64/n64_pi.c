@@ -339,38 +339,22 @@ void n64_pi_run(void)
 				}
 			} while (1);
 		} else {
+			// Don't handle this request - jump back to the beginning.
+			// This way, there won't be a bus conflict in case e.g. a physical N64DD is connected.
 
-			do {
-				// We don't support this memory area yet, but we have to consume another value
-				next_word = 0;
+			// Enable to log addresses to UART
+#if 0
+			uart_print_hex_u32(last_addr);
+#endif
 
-				// Read command/address
-				addr = n64_pi_get_value(pio);
-				if (addr == 0) {
-					// READ
-					pio_sm_put(pio, 0, swap8(next_word));
-					last_addr += 2;
-				} else if (addr & 0x00000001) {
-					// WRITE
-					// Ignore
-					last_addr += 2;
-				} else {
-					// New address
-					break;
-				}
-			} while(1);
+			// Read to empty fifo
+			addr = n64_pi_get_value(pio);
 
-			// // Don't handle this request - jump back to the beginning.
-			// // This way, there won't be a bus conflict in case e.g. a physical N64DD is connected.
+			// Jump to start of the PIO program.
+			pio_sm_exec(pio, 0, pio_encode_jmp(offset + 0));
 
-			// // Read to empty fifo
-			// addr = n64_pi_get_value(pio);
-
-			// // Jump to start of the PIO program.
-			// pio_sm_exec(pio, 0, pio_encode_jmp(0));
-
-			// // Read and handle the following requests normally
-			// addr = n64_pi_get_value(pio);
+			// Read and handle the following requests normally
+			addr = n64_pi_get_value(pio);
 		}
 	}
 }
