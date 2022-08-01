@@ -300,6 +300,8 @@ void n64_pi_run(void)
 					case PC64_REGISTER_MAGIC:
 						next_word = PC64_MAGIC;
 						break;
+					case PC64_REGISTER_SDCARD_LIST:
+						
 					default:
 						next_word = 0;
 					}

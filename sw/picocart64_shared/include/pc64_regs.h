@@ -35,3 +35,9 @@
 
 // [WRITE]: Set the random seed to a 32-bit value
 #define PC64_REGISTER_RAND_SEED    0x00000008
+
+// Get list of files on SDCard
+#define PC64_REGISTER_SDCARD_LIST    0x00000001
+
+// Load Selected Rom into memory and reboot
+#define PC64_REGISTER_SDCARD_ROM_SELECT    0x00000002
