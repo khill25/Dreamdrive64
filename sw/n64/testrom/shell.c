@@ -12,6 +12,7 @@
 
 #include "git_info.h"
 #include "shell.h"
+#include "pc64_sdfs.h"
 
 /*
 TODO
@@ -120,6 +121,11 @@ static void draw_bottom_bar(display_context_t display) {
     graphics_draw_text(display, MARGIN_PADDING + 32, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Load ROM");
 }
 
+// Pass in a reference to an array of strings
+void fetch_rom_list(char** entries) {
+
+}
+
 /*
  * Init display and controller input then render a list of strings, showing currently selected
  */
@@ -220,6 +226,12 @@ void start_shell(void) {
         printf("Unable to init filesystem. ret: %d\n", ret);
 		printf("git rev %08x\n", GIT_REV);
     } else {
+
+		// Try to init the sd card
+		if (!debug_init_sdfs("sd:/", -1)) {
+			printf("Unable to access SD Card on Picocart64.\n");
+		}
+
         /* Load sprites for shell from the filesystem */
         init_sprites();
 

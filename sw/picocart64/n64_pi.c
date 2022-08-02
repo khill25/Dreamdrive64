@@ -25,6 +25,7 @@
 #include "ringbuf.h"
 #include "sram.h"
 #include "stdio_async_uart.h"
+#include "sd_card.h"
 
 // The rom to load in normal .z64, big endian, format
 #include "rom_vars.h"
@@ -304,7 +305,12 @@ void n64_pi_run(void)
 					case PC64_REGISTER_MAGIC:
 						next_word = PC64_MAGIC;
 						break;
-					case PC64_REGISTER_SDCARD_LIST:
+					case PC64_COMMAND_SD_READ:
+						// get data from sd card via uart to second pico
+						// data will be placed into "base address memory"
+						// starting at location PC64_BASE_ADDRESS_START
+						// and will go for N bytes
+
 						
 					default:
 						next_word = 0;
@@ -337,6 +343,49 @@ void n64_pi_run(void)
 					case PC64_REGISTER_RAND_SEED:
 						pc64_rand_seed(write_word);
 						break;
+
+					case PC64_REGISTER_SD_READ_SECTOR:
+						pc64_set_sd_read_sector(write_word);
+						break;
+
+					case PC64_REGISTER_SD_READ_NUM_SECTORS:
+						pc64_set_sd_read_sector_count(write_word);
+						break;
+
+					case PC64_REGISTER_SD_ROM_SELECT:
+						// at this point we have already read 32 bits (4 characters)
+						// each read is 16 bits (2 bytes)
+						
+						char rom_title[256];
+						rom_title[0] = (write_word & 0xFF000000) >> 24;
+						rom_title[1] = (write_word & 0x00FF0000) >> 16;
+						rom_title[2] = (write_word & 0x0000FF00) >> 8;
+						rom_title[3] = (write_word & 0x000000FF);
+
+						// loop to less than size as we are doing a +1 index in the loop
+						// Saves a check for boundries
+						uint ni = 4;
+						for (; ni < 254; ni += 2) {
+							// assuming that the 32bit value returned is bits high ie
+							// 0xFFFF0000 - F are the values I want
+							uint16_t v = n64_pi_get_value(pio) >> 16;
+							rom_title[ni] =   (v & 0xFF00) >> 8;
+							rom_title[ni+1] = (v & 0x00FF);
+
+							// If we got a null character we can exit early
+							if (rom_title[ni] == 0x0) {
+								break;
+							} else if (rom_title[ni+1] == 0x0) {
+								ni += 1; // increment the address if we also read this address
+								break;
+							}
+						}
+
+						// finally set the title of the selected rom
+						pc64_set_sd_rom_selection(rom_title);
+
+						// Not sure if this is needed
+						last_addr += (ni - 4);
 					default:
 						break;
 					}

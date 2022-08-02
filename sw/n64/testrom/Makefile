@@ -46,7 +46,7 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 
 $(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin $(BUILD_DIR)/$(PROG_NAME).dfs
 	$(V)$(ECHO) "[ Z64 ]" $(notdir $@)
-    $(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
+	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
 	$(V)$(ECHO) "[ CHK ]" $(notdir $@)
 	$(V)$(CHKSUM64) $@
 
@@ -55,7 +55,7 @@ $(BUILD_DIR)/$(PROG_NAME).bin: $(BUILD_DIR)/$(PROG_NAME).elf
 	$(V)$(OBJCOPY) $< $@ -O binary
 
 $(BUILD_DIR)/$(PROG_NAME).dfs: $(wildcard filesystem/*)
-    $(MKDFS) $@ filesystem
+	$(MKDFS) $@ filesystem
 
 $(BUILD_DIR)/$(PROG_NAME).elf: $(OBJECTS)
 	$(V)$(ECHO) "[  LD ]" $(notdir $@)
