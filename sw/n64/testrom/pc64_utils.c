@@ -22,6 +22,10 @@ typedef struct PI_regs_s {
 } PI_regs_t;
 static volatile PI_regs_t *const PI_regs = (PI_regs_t *) 0xA4600000;
 
+uint8_t __attribute__((aligned(16))) facit_buf[SRAM_1MBIT_SIZE];
+uint8_t __attribute__((aligned(16))) read_buf[SRAM_1MBIT_SIZE];
+char __attribute__((aligned(16))) write_buf[0x1000];
+
 void verify_memory_range(uint32_t base, uint32_t offset, uint32_t len)
 {
 	uint32_t start = base | offset;

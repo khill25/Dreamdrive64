@@ -12,7 +12,6 @@
 
 #include "git_info.h"
 #include "shell.h"
-#include "pc64_sdfs.h"
 
 /*
 TODO
@@ -121,6 +120,59 @@ static void draw_bottom_bar(display_context_t display) {
     graphics_draw_text(display, MARGIN_PADDING + 32, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Load ROM");
 }
 
+int ls(char** file_list, const char *dir) {
+    // char cwdbuf[FF_LFN_BUF] = {0};
+    FRESULT fr; /* Return value */
+    char const *p_dir = dir;
+    // if (dir[0]) {
+    //     p_dir = dir;
+    // } else {
+    //     fr = f_getcwd(cwdbuf, sizeof cwdbuf);
+    //     if (FR_OK != fr) {
+    //         printf("f_getcwd error: %s (%d)\n", FRESULT_str(fr), fr);
+    //         return;
+    //     }
+    //     p_dir = cwdbuf;
+    // }
+    // printf("Directory Listing: %s\n", p_dir);
+    DIR dj;      /* Directory object */
+    FILINFO fno; /* File information */
+    memset(&dj, 0, sizeof dj);
+    memset(&fno, 0, sizeof fno);
+    fr = f_findfirst(&dj, &fno, p_dir, "*");
+    
+    if (FR_OK != fr) {
+        printf("f_findfirst error: (%d)\n", fr);
+        return 0;
+    }
+	int num_entries = 0;
+    while (fr == FR_OK && fno.fname[0]) { /* Repeat while an item is found */
+        /* Create a string that includes the file name, the file size and the
+         attributes string. */
+        const char *pcWritableFile = "writable file",
+                   *pcReadOnlyFile = "read only file",
+                   *pcDirectory = "directory";
+        const char *pcAttrib;
+        /* Point pcAttrib to a string that describes the file. */
+        if (fno.fattrib & AM_DIR) {
+            pcAttrib = pcDirectory;
+        } else if (fno.fattrib & AM_RDO) {
+            pcAttrib = pcReadOnlyFile;
+        } else {
+            pcAttrib = pcWritableFile;
+        }
+        /* Create a string that includes the file name, the file size and the
+         attributes string. */
+        printf("%s [%s] [size=%llu]\n", fno.fname, pcAttrib, fno.fsize);
+		sprintf(file_list[num_entries++], "%s [size=%llu]\n", fno.fname, fno.fsize);
+
+        fr = f_findnext(&dj, &fno); /* Search for next item */
+    }
+    f_closedir(&dj);
+
+	return num_entries;
+}
+
 // Pass in a reference to an array of strings
 void fetch_rom_list(char** entries) {
 
@@ -132,30 +184,39 @@ void fetch_rom_list(char** entries) {
 static void show_list(void)
 {
 	// For now, hard code some strings in so we can have something to test with
-	char *entries[21] = {
-		"Goldeneye 007 (USA).n64",
-		"Mario 64 (USA).n64",
-		"Star Wars Rouge Squadron (USA).n64",
-		"Star Wars Shadows of the Empire (USA).n64",
-		"The Legend of Zelda, Ocarina of Time (USA).n64",
-		"Perfect Dark (USA).n64",
-		"Mario Kart 64 (USA).n64",
-		"Killer Instinct 64 (USA).n64",
-		"Star Wars Podracer (USA).n64",
-		"007 Tomorrow Never Dies (USA).n64",
-		"Donkey Kong 64 (USA).n64",
-		"testrom.n64",
-		/*"お母さん３(JPN).n64", */// I don't think it likes this entry too much, will need a font that supports UTF8
-		"Harvest Moon 64 (JPN).n64",
-		"Crusin' USA (USA).n64",
-		"Metriod 64 (USA).n64",
-		"Super Secret Menu Rom.n64",
-		"Winback (USA).n64",
-		"Resident Evil 2 (USA).n64",
-		"Best Game You Have Never Hear Of (USA).n64",
-		"testrom2.n64",
-		"Final Fight 64 (JPN).n64",
-	};
+	// char *entries[21] = {
+	// 	"Goldeneye 007 (USA).n64",
+	// 	"Mario 64 (USA).n64",
+	// 	"Star Wars Rouge Squadron (USA).n64",
+	// 	"Star Wars Shadows of the Empire (USA).n64",
+	// 	"The Legend of Zelda, Ocarina of Time (USA).n64",
+	// 	"Perfect Dark (USA).n64",
+	// 	"Mario Kart 64 (USA).n64",
+	// 	"Killer Instinct 64 (USA).n64",
+	// 	"Star Wars Podracer (USA).n64",
+	// 	"007 Tomorrow Never Dies (USA).n64",
+	// 	"Donkey Kong 64 (USA).n64",
+	// 	"testrom.n64",
+	// 	/*"お母さん３(JPN).n64", */// I don't think it likes this entry too much, will need a font that supports UTF8
+	// 	"Harvest Moon 64 (JPN).n64",
+	// 	"Crusin' USA (USA).n64",
+	// 	"Metriod 64 (USA).n64",
+	// 	"Super Secret Menu Rom.n64",
+	// 	"Winback (USA).n64",
+	// 	"Resident Evil 2 (USA).n64",
+	// 	"Best Game You Have Never Hear Of (USA).n64",
+	// 	"testrom2.n64",
+	// 	"Final Fight 64 (JPN).n64",
+	// };
+
+	char *entries[256];
+    printf("Reading SD card...\n");
+	NUM_ENTRIES = ls(entries, "/");
+
+    for (int i = 0; i < 50; i++) {
+        printf(".");
+        wait_ms(100);
+    }
 
 	int currently_selected = 0;
 	int first_visible = 0;
@@ -212,7 +273,7 @@ static void init_sprites(void) {
     dfs_read( a_button_icon, 1, dfs_size( fp ), fp );
     dfs_close( fp );
 
-    //a_button_icon = read_sprite( "rom://a_button_icon.sprite" );
+    //api_write_raw_button_icon = read_sprite( "rom://a_button_icon.sprite" );
 }
 
 void start_shell(void) {
@@ -226,10 +287,12 @@ void start_shell(void) {
         printf("Unable to init filesystem. ret: %d\n", ret);
 		printf("git rev %08x\n", GIT_REV);
     } else {
-
+        printf("Initing sd access");
+        wait_ms( 100 );
 		// Try to init the sd card
 		if (!debug_init_sdfs("sd:/", -1)) {
 			printf("Unable to access SD Card on Picocart64.\n");
+            wait_ms(5000);
 		}
 
         /* Load sprites for shell from the filesystem */

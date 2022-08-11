@@ -15,9 +15,9 @@
 #define SRAM_768KBIT_BANKS        3
 #define SRAM_1MBIT_BANKS          4
 
-uint8_t __attribute__((aligned(16))) facit_buf[SRAM_1MBIT_SIZE];
-uint8_t __attribute__((aligned(16))) read_buf[SRAM_1MBIT_SIZE];
-char __attribute__((aligned(16))) write_buf[0x1000];
+extern uint8_t __attribute__((aligned(16))) facit_buf[SRAM_1MBIT_SIZE];
+extern uint8_t __attribute__((aligned(16))) read_buf[SRAM_1MBIT_SIZE];
+extern char __attribute__((aligned(16))) write_buf[0x1000];
 
 void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len);
 void pi_write_raw(const void *src, uint32_t base, uint32_t offset, uint32_t len);

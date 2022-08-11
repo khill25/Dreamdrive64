@@ -4,6 +4,7 @@ add_executable(picocart64
     picocart64.c
     sram.c
     utils.c
+    sd_card.c
 )
 
 if(NOT DEFINED REGION)

@@ -41,9 +41,6 @@ static const uint16_t *rom_file_16 = (uint16_t *) rom_chunks;
 
 RINGBUF_CREATE(ringbuf, 64, uint32_t);
 
-// UART TX buffer
-static uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
-
 static inline uint32_t resolve_sram_address(uint32_t address)
 {
 	uint32_t bank = (address >> 18) & 0x3;
@@ -305,13 +302,10 @@ void n64_pi_run(void)
 					case PC64_REGISTER_MAGIC:
 						next_word = PC64_MAGIC;
 						break;
-					case PC64_COMMAND_SD_READ:
-						// get data from sd card via uart to second pico
-						// data will be placed into "base address memory"
-						// starting at location PC64_BASE_ADDRESS_START
-						// and will go for N bytes
-
-						
+					case PC64_REGISTER_SD_BUSY:
+						next_word = is_sd_busy() ? 0x00000001 : 0x00000000;
+						break;
+	
 					default:
 						next_word = 0;
 					}
@@ -334,63 +328,85 @@ void n64_pi_run(void)
 
 					// Read two 16-bit half-words and merge them to a 32-bit value
 					uint32_t write_word = addr & 0xFFFF0000;
-					write_word |= n64_pi_get_value(pio) >> 16;
+					uint addr_advance = 4;
 
 					switch (last_addr - PC64_CIBASE_ADDRESS_START) {
 					case PC64_REGISTER_UART_TX:
+						write_word |= n64_pi_get_value(pio) >> 16;
 						stdio_uart_out_chars((const char *)pc64_uart_tx_buf, write_word & (sizeof(pc64_uart_tx_buf) - 1));
 						break;
 					case PC64_REGISTER_RAND_SEED:
+						write_word |= n64_pi_get_value(pio) >> 16;
 						pc64_rand_seed(write_word);
 						break;
 
-					case PC64_REGISTER_SD_READ_SECTOR:
-						pc64_set_sd_read_sector(write_word);
+					case PC64_COMMAND_SD_READ:
+						write_word |= n64_pi_get_value(pio) >> 16;
+						pc64_send_sd_read_command();
+						break;
+
+					case PC64_REGISTER_SD_READ_SECTOR0:
+						addr_advance = 2;
+						pc64_set_sd_read_sector_part(0, write_word);
+						break;
+					case PC64_REGISTER_SD_READ_SECTOR1:
+						addr_advance = 2;
+						pc64_set_sd_read_sector_part(1, write_word);
+						break;
+					case PC64_REGISTER_SD_READ_SECTOR2:
+						addr_advance = 2;
+						pc64_set_sd_read_sector_part(2, write_word);
+						break;
+					case PC64_REGISTER_SD_READ_SECTOR3:
+						addr_advance = 2;
+						pc64_set_sd_read_sector_part(3, write_word);
 						break;
 
 					case PC64_REGISTER_SD_READ_NUM_SECTORS:
+						write_word |= n64_pi_get_value(pio) >> 16;
 						pc64_set_sd_read_sector_count(write_word);
 						break;
 
-					case PC64_REGISTER_SD_ROM_SELECT:
-						// at this point we have already read 32 bits (4 characters)
-						// each read is 16 bits (2 bytes)
+					// case PC64_REGISTER_SD_ROM_SELECT:
+					// 	// at this point we have already read 32 bits (4 characters)
+					// 	// each read is 16 bits (2 bytes)
 						
-						char rom_title[256];
-						rom_title[0] = (write_word & 0xFF000000) >> 24;
-						rom_title[1] = (write_word & 0x00FF0000) >> 16;
-						rom_title[2] = (write_word & 0x0000FF00) >> 8;
-						rom_title[3] = (write_word & 0x000000FF);
+					// 	char rom_title[256];
+					// 	rom_title[0] = (write_word & 0xFF000000) >> 24;
+					// 	rom_title[1] = (write_word & 0x00FF0000) >> 16;
+					// 	rom_title[2] = (write_word & 0x0000FF00) >> 8;
+					// 	rom_title[3] = (write_word & 0x000000FF);
 
-						// loop to less than size as we are doing a +1 index in the loop
-						// Saves a check for boundries
-						uint ni = 4;
-						for (; ni < 254; ni += 2) {
-							// assuming that the 32bit value returned is bits high ie
-							// 0xFFFF0000 - F are the values I want
-							uint16_t v = n64_pi_get_value(pio) >> 16;
-							rom_title[ni] =   (v & 0xFF00) >> 8;
-							rom_title[ni+1] = (v & 0x00FF);
+					// 	// loop to less than size as we are doing a +1 index in the loop
+					// 	// Saves a check for boundries
+					// 	uint ni = 4;
+					// 	for (; ni < 254; ni += 2) {
+					// 		// assuming that the 32bit value returned is bits high ie
+					// 		// 0xFFFF0000 - F are the values I want
+					// 		uint16_t v = n64_pi_get_value(pio) >> 16;
+					// 		rom_title[ni] =   (v & 0xFF00) >> 8;
+					// 		rom_title[ni+1] = (v & 0x00FF);
 
-							// If we got a null character we can exit early
-							if (rom_title[ni] == 0x0) {
-								break;
-							} else if (rom_title[ni+1] == 0x0) {
-								ni += 1; // increment the address if we also read this address
-								break;
-							}
-						}
+					// 		// If we got a null character we can exit early
+					// 		if (rom_title[ni] == 0x0) {
+					// 			break;
+					// 		} else if (rom_title[ni+1] == 0x0) {
+					// 			ni += 1; // increment the address if we also read this address
+					// 			break;
+					// 		}
+					// 	}
 
-						// finally set the title of the selected rom
-						pc64_set_sd_rom_selection(rom_title);
+					// 	// finally set the title of the selected rom
+					// 	pc64_set_sd_rom_selection(rom_title);
 
-						// Not sure if this is needed
-						last_addr += (ni - 4);
+					// 	// Not sure if this is needed
+					// 	last_addr += (ni - 4);
+					// 	break;
 					default:
 						break;
 					}
 
-					last_addr += 4;
+					last_addr += addr_advance;
 				} else {
 					// New address
 					break;

@@ -113,31 +113,31 @@ int main(void)
 	pc64_rand_seed(0);
 
 	// Compare buffer with RNG
-	printf("[ -- ] RNG Test: ");
-	bool rng_ok = true;
-	for (int j = 0; j < 64 && rng_ok; j++) {
-		// Read back 1Mbit of RAND values
-		data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-		pi_read_raw(read_buf, PC64_RAND_ADDRESS_START, 0, sizeof(read_buf));
-		printf(".");
-		fflush(stdout);
+	// printf("[ -- ] RNG Test: ");
+	// bool rng_ok = true;
+	// for (int j = 0; j < 64 && rng_ok; j++) {
+	// 	// Read back 1Mbit of RAND values
+	// 	data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
+	// 	pi_read_raw(read_buf, PC64_RAND_ADDRESS_START, 0, sizeof(read_buf));
+	// 	printf(".");
+	// 	fflush(stdout);
 
-		for (int i = 0; i < sizeof(read_buf) / sizeof(uint16_t); i++) {
-			uint16_t value = pc64_rand16();
+	// 	for (int i = 0; i < sizeof(read_buf) / sizeof(uint16_t); i++) {
+	// 		uint16_t value = pc64_rand16();
 
-			if (value != read_buf16[i]) {
-				printf("\n       Error @%d: ours %04X != theirs %04X", i, value, read_buf16[i]);
-				rng_ok = false;
-				break;
-			}
-		}
-	}
+	// 		if (value != read_buf16[i]) {
+	// 			printf("\n       Error @%d: ours %04X != theirs %04X", i, value, read_buf16[i]);
+	// 			rng_ok = false;
+	// 			break;
+	// 		}
+	// 	}
+	// }
 
-	if (rng_ok) {
-		printf("\n[ OK ] Random stress test verified correctly.\n");
-	} else {
-		printf("\n[FAIL] Random stress test failed.\n");
-	}
+	// if (rng_ok) {
+	// 	printf("\n[ OK ] Random stress test verified correctly.\n");
+	// } else {
+	// 	printf("\n[FAIL] Random stress test failed.\n");
+	// }
 
 	///////////////////////////////////////////////////////////////////////////
 

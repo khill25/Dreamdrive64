@@ -1,10 +1,10 @@
-/*
+// /*
 
-This code needs to live in libdragon and will also need to modify the debug.c file to include definitions for picocart64
-to use functions in here
+// This code needs to live in libdragon and will also need to modify the debug.c file to include definitions for picocart64
+// to use functions in here
 
 
-*/
+// */
 // /**
 //  * SPDX-License-Identifier: BSD-2-Clause
 //  *
@@ -13,9 +13,109 @@ to use functions in here
 //  */
 
 // #include <libdragon.h>
-// #include "pc64_regs.h"
-// #include "pc64_utils.h"
 // #include "pc64_sdfs.h"
+
+// // PicoCart64 Address space
+
+// // [READ/WRITE]: Scratch memory used for various functions
+// #ifndef PC64_BASE_ADDRESS_START
+// #define PC64_BASE_ADDRESS_START     0x81000000
+// #define PC64_BASE_ADDRESS_LENGTH    0x00001000
+// #define PC64_BASE_ADDRESS_END       (PC64_BASE_ADDRESS_START + PC64_BASE_ADDRESS_LENGTH - 1)
+
+// // [READ]: Returns pseudo-random values.
+// //         Address does not matter.
+// //         Each returned 16-bit word generates a new random value.
+// //         PC64_REGISTER_RESET_RAND resets the random seed.
+// #define PC64_RAND_ADDRESS_START     0x82000000
+// #define PC64_RAND_ADDRESS_LENGTH    0x01000000
+// #define PC64_RAND_ADDRESS_END       (PC64_RAND_ADDRESS_START + PC64_RAND_ADDRESS_LENGTH - 1)
+
+// // [READ/WRITE]: Command address space. See register definitions below for details.
+// #define PC64_CIBASE_ADDRESS_START   0x83000000
+// #define PC64_CIBASE_ADDRESS_LENGTH  0x00001000
+// #define PC64_CIBASE_ADDRESS_END     (PC64_CIBASE_ADDRESS_START + PC64_CIBASE_ADDRESS_LENGTH - 1)
+
+// // [Read]: Returns PC64_MAGIC
+// #define PC64_REGISTER_MAGIC         0x00000000
+// #define PC64_MAGIC                  0xDEAD6400
+
+// // [WRITE]: Write number of bytes to print from TX buffer
+// #define PC64_REGISTER_UART_TX       0x00000004
+
+// // [WRITE]: Set the random seed to a 32-bit value
+// #define PC64_REGISTER_RAND_SEED     0x00000008
+
+// /* *** SD CARD *** */
+// // [READ]: Signals pico to start data read from SD Card
+// #define PC64_COMMAND_SD_READ       0x00000012
+
+// // [READ]: Load selected rom into memory and boot, 
+// #define PC64_COMMAND_SD_ROM_SELECT 0x00000013
+
+// // [READ] 1 while sd card is busy, 0 once the CI is free
+// #define PC64_REGISTER_SD_BUSY PC64_COMMAND_SD_ROM_SELECT + 0x1
+
+// // [WRITE] Sector to read from SD Card, 8 bytes
+// #define PC64_REGISTER_SD_READ_SECTOR PC64_REGISTER_SD_BUSY + 0x1
+
+// // [WRITE] number of sectors to read from the sd card, 8 bytes
+// #define PC64_REGISTER_SD_READ_NUM_SECTORS PC64_REGISTER_SD_READ_SECTOR + 0x8
+
+// // [WRITE] write the selected file name that should be loaded into memory
+// // 255 bytes
+// #define PC64_REGISTER_SD_SELECT_ROM PC64_REGISTER_SD_READ_NUM_SECTORS + 0x8
+// #endif
+
+// /* // Should be able to just use the write_io command, hopefully won't need these special functions
+// // typedef struct PI_regs_s {
+// // 	volatile void *ram_address;
+// // 	uint32_t pi_address;
+// // 	uint32_t read_length;
+// // 	uint32_t write_length;
+// // } PI_regs_t;
+// // static volatile PI_regs_t *const PI_regs = (PI_regs_t *) 0xA4600000;
+
+// // void pi_read_raw(void *dest, uint32_t base, uint32_t offset, uint32_t len)
+// // {
+// // 	assert(dest != NULL);
+// // 	verify_memory_range(base, offset, len);
+
+// // 	disable_interrupts();
+// // 	dma_wait();
+
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->ram_address = UncachedAddr(dest);
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->pi_address = offset | base;
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->write_length = len - 1;
+// // 	MEMORY_BARRIER();
+
+// // 	enable_interrupts();
+// // 	dma_wait();
+// // }
+
+// // void pi_write_raw(const void *src, uint32_t base, uint32_t offset, uint32_t len)
+// // {
+// // 	assert(src != NULL);
+// // 	verify_memory_range(base, offset, len);
+
+// // 	disable_interrupts();
+// // 	dma_wait();
+
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->ram_address = UncachedAddr(src);
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->pi_address = offset | base;
+// // 	MEMORY_BARRIER();
+// // 	PI_regs->read_length = len - 1;
+// // 	MEMORY_BARRIER();
+
+// // 	enable_interrupts();
+// // 	dma_wait();
+// // }
+// */
 
 // uint8_t pc64_sd_wait() {
 //     u32 timeout = 0;
