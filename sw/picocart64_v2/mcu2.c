@@ -23,7 +23,7 @@ void mcu2_main(void)
 	printf("PicoCart64 Boot (git rev %08x)\r\n", GIT_REV);
 
 	// TODO: Remove later
-	sleep_ms(1000);
+	// sleep_ms(1000); // Sleeps crash when using the debugger :(
 
 	// Boot MCU1
 	gpio_set_dir(PIN_MCU1_RUN, GPIO_OUT);
@@ -32,6 +32,6 @@ void mcu2_main(void)
 	while (true) {
 		count++;
 		printf("Hello, world! I am MCU 2 -- %d\n", count);
-		sleep_ms(1000);
+		// sleep_ms(1000); // Sleeps crash when using the debugger :(
 	}
 }
