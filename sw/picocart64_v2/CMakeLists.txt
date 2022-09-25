@@ -3,6 +3,7 @@ add_executable(picocart64_v2
     mcu1.c
     mcu2.c
     ws2812b.c
+    psram_array.c
 )
 
 #####################
