@@ -34,7 +34,6 @@ RamArrayConfig v2StandardDefaultConfig = {
     .io_pin_3 = QSPI_SD3_PIN,
 };
 
-
 void runRamArrayTests() {
 	sleep_ms(1000); // delay before running tests just to be sure we are finished writing to MCU1
 
@@ -75,13 +74,12 @@ void mcu2_main(void)
 	int count = 0;
 
 	// Init async UART on pin 0/1
-	//stdio_async_uart_init_full(uart0, UART0_BAUD_RATE, PIN_UART0_TX, PIN_UART0_RX);
-	stdio_usb_init();
+	stdio_async_uart_init_full(uart0, UART0_BAUD_RATE, PIN_UART0_TX, PIN_UART0_RX);
 
 	printf("PicoCart64 Boot (git rev %08x)\r\n", GIT_REV);
 
 	// TODO: Remove later
-	sleep_ms(1000); // Sleeps crash when using the debugger :(
+	sleep_ms(300); // Sleeps crash when using the debugger :(
 
 	// Boot MCU1
 	gpio_set_dir(PIN_MCU1_RUN, GPIO_OUT);

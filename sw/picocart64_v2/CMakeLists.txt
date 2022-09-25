@@ -41,8 +41,8 @@ target_link_libraries(picocart64_v2
 )
 
 # stdio config
-pico_enable_stdio_usb(picocart64_v2 1)
-pico_enable_stdio_uart(picocart64_v2 0)
+pico_enable_stdio_usb(picocart64_v2 0)
+pico_enable_stdio_uart(picocart64_v2 1)
 
 # create map/bin/hex/uf2 file etc.
 pico_add_extra_outputs(picocart64_v2)

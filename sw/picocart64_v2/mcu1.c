@@ -12,7 +12,7 @@ void mcu1_main(void)
 	int count = 0;
 
 	// Enable STDIO over USB
-	stdio_usb_init();
+//	stdio_usb_init();
 
 	while (true) {
 		count++;
