@@ -37,7 +37,6 @@
     out pins, 1
     wait 1 GPIO 26
     in pins, 1
-    
 
 % c-sdk {
 #include "hardware/gpio.h"
@@ -89,7 +88,7 @@ static inline void pio_spi_slave_init(PIO pio, uint sm, uint prog_offs, uint n_b
     pio_gpio_init(pio, pin_miso);
 
     // SPI is synchronous, so bypass input synchroniser to reduce input delay.
-    hw_set_bits(&pio->input_sync_bypass, 1u << pin_miso);
+    // hw_set_bits(&pio->input_sync_bypass, 1u << pin_miso);
 
     pio_sm_init(pio, sm, prog_offs, &c);
     pio_sm_set_enabled(pio, sm, true);

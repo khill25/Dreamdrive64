@@ -88,26 +88,9 @@ void mcu1_core1_entry() {
 		.cs_pin = -1
 	};
 
-	busy_wait_ms(500);
-
-	uint8_t cmd[1] = { 0xAA };
-	// pio_spi_write8(cmd, 1);
-	// cmd[0] = 0xBB;
-	// pio_spi_write8(cmd, 1);
-	// cmd[0] = 0xCC;
-	// pio_spi_write8(cmd, 1);
-	// cmd[0] = 0xDD;
-	// pio_spi_write8(cmd, 1);
-
-	uint8_t i = 0;
-
+	uint8_t buf[] = { 0 };
+	uint8_t n[] = { 0 };
 	while (1) {
-		pio_spi_write8_blocking(&pio_spi, &i, 1);
-		i++;
-		if (i == 255) {
-			i = 0;
-		}
-		sleep_ms(300);
 		// tight_loop_contents();
 
 		// int32_t cmd = multicore_fifo_pop_blocking();
@@ -119,11 +102,8 @@ void mcu1_core1_entry() {
 		// 	default:
 		// 		break;
 		// }
-
-		// int32_t (*func)() = (int32_t(*)()) multicore_fifo_pop_blocking();
-        // int32_t p = multicore_fifo_pop_blocking();
-        // int32_t result = (*func)(p);
-        // multicore_fifo_push_blocking(result);
+		pio_spi_read8(buf, 1);
+		pio_spi_write8(buf, 1);
 	}
 }
 
@@ -274,7 +254,8 @@ void mcu1_main(void)
 		pc64_uart_tx_buf[i] = 0xFFFF - i;
 	}
 
-	multicore_launch_core1(mcu1_core1_entry);
+	// multicore_launch_core1(mcu1_core1_entry);
+	mcu1_core1_entry();
 
 	n64_pi_run();
 

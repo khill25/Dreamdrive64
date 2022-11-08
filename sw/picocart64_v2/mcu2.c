@@ -157,21 +157,26 @@ void main_task_entry(__unused void *params)
 	};
 
 	unsigned char mcu2_cmd_buffer[64];
+	uint8_t cmd[1];
+	uint8_t n[1];
+	int v = 0;
 	printf("\n\n\n\n");
 	while (true) {
 		tight_loop_contents();
 
-		//pio_spi_read8(mcu2_cmd_buffer, 17);
-		//process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
-		pio_spi_read8_blocking(&pio_spi, mcu2_cmd_buffer, 8);
-		for (int i = 0; i < 8; i++) {
-			printf("%02x ", mcu2_cmd_buffer[i]);
-		}
-		
+		// pio_spi_read8(mcu2_cmd_buffer, 17);
+		// process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
 
-		if(sendDataReady) {
-			send_sd_card_data();
-		}
+		// if(sendDataReady) {
+		// 	// send_sd_card_data();
+		// 	send_data(sectorToSend, 1);
+		// }
+		cmd[0] = v++;
+		pio_spi_write8(cmd, 1);
+		pio_spi_read8(mcu2_cmd_buffer, 1);
+		sleep_ms(1000);
+		printf("%02x ", mcu2_cmd_buffer[0]);
+		
 
 #if 0
 		printf("----------------------------------------\n");

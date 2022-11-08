@@ -34,27 +34,27 @@
 #define COMMAND_SD_WRITE 0x77 // literally the w char
 #define DISK_READ_BUFFER_SIZE 512
 
-#define PRINT_BUFFER_AFTER_SEND 0
+#define PRINT_BUFFER_AFTER_SEND 1
 
 int PC64_MCU_ID = -1;
 
-volatile int bufferIndex = 0; // Used on MCU1 to track where to put the next byte received from MCU2
-volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
+__volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
+uint8_t diskReadBuffer[DISK_READ_BUFFER_SIZE];
 
-volatile uint16_t sd_sector_registers[4];
-volatile uint64_t sd_read_sector_start;
-volatile uint32_t sd_read_sector_count;
-volatile char sd_selected_rom_title[256];
-volatile bool sd_is_busy = false;
+__volatile uint16_t sd_sector_registers[4];
+__volatile uint64_t sd_read_sector_start;
+__volatile uint32_t sd_read_sector_count;
+__volatile char sd_selected_rom_title[256];
+__volatile bool sd_is_busy = false;
 
 // Variables used to signal sd data send from mcu2 -> mcu1 and the data that needs to be sent
-volatile bool sendDataReady = false;
-volatile uint64_t sectorToSend = 0;
-volatile uint32_t numSectorsToSend = 0;
+__volatile bool sendDataReady = false;
+__volatile uint32_t sectorToSend = 0;
+__volatile uint32_t numSectorsToSend = 0;
 
 // sd_card_t *pSD; // Reference to the SD card object. Only valid on MCU2
 
-void pc64_set_sd_read_sector(uint64_t sector) {
+void pc64_set_sd_read_sector(uint32_t sector) {
     #if SD_CARD_RX_READ_DEBUG == 1
         printf("set read sector = %ld", sector);
     #endif
@@ -69,7 +69,8 @@ void pc64_set_sd_read_sector_part(int index, uint16_t value) {
     // Assume we have set the other sectors as since this is the final piece
     // We can set the sector we want to actually read
     if (index == 3) {
-        uint64_t s = ((uint64_t)(sd_sector_registers[0]) << 48 | ((uint64_t)sd_sector_registers[1]) << 32 | sd_sector_registers[2] << 16 | sd_sector_registers[3]);
+        // uint64_t s = ((uint64_t)(sd_sector_registers[0]) << 48 | ((uint64_t)sd_sector_registers[1]) << 32 | sd_sector_registers[2] << 16 | sd_sector_registers[3]);
+        uint32_t s = (uint32_t)(sd_sector_registers[2] << 16 | sd_sector_registers[3]);
         pc64_set_sd_read_sector(s);
     }
 }
@@ -90,7 +91,6 @@ void pc64_set_sd_rom_selection(char* title) {
 void pc64_send_sd_read_command(void) {
     // Block cart while waiting for data
     sd_is_busy = true;
-    bufferIndex = 0;
 
     uint64_t sector = sd_read_sector_start;
     uint32_t sectorCount = 1;
@@ -119,7 +119,23 @@ void pc64_send_sd_read_command(void) {
     pio_spi_write8(cmd, 17);
 
     // Now read response
-    pio_spi_read16(pc64_uart_tx_buf, 512);
+    pio_spi_read8(diskReadBuffer, 512);
+
+    uint8_t lastBufChar = 0;
+    int bufferIndex = 0;
+    for (int i = 0; i < 512; i++) {
+        uint8_t value = diskReadBuffer[i];
+        // Combine two char values into a 16 bit value
+        // Only increment bufferIndex when adding a value
+        // else, store the ch into the holding field
+        if (i % 2 == 1) {
+            uint16_t value16 = lastBufChar << 8 | value;
+            pc64_uart_tx_buf[bufferIndex] = value16;
+            bufferIndex += 1;
+        } else {
+            lastBufChar = value;
+        }
+    }
 
     sd_is_busy = false;
 }
@@ -132,8 +148,9 @@ bool receivingData = false;
 void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
     // read
     int index = 0;
+    int bufferIndex = 0;
     do {
-        char ch = mcu2_cmd_buffer[index++];
+        char ch = mcu2_cmd_buffer[index];
         
         printf("%02x ", ch);
         // if (ch == 0xAA) {
@@ -159,14 +176,14 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
             char command = mcu2_cmd_buffer[0];
             uint32_t sector_front =(mcu2_cmd_buffer[1] << 24) | (mcu2_cmd_buffer[2] << 16) | (mcu2_cmd_buffer[3] << 8) | mcu2_cmd_buffer[4];
             uint32_t sector_back = (mcu2_cmd_buffer[5] << 24) | (mcu2_cmd_buffer[6] << 16) | (mcu2_cmd_buffer[7] << 8) | mcu2_cmd_buffer[8];
-            uint64_t sector = ((uint64_t)sector_front) << 32 | sector_back;
+            // uint64_t sector = ((uint64_t)sector_front) << 32 | sector_back;
+            uint32_t sector = sector_back;
             volatile uint32_t sectorCount = (mcu2_cmd_buffer[9] << 24) | (mcu2_cmd_buffer[10] << 16) | (mcu2_cmd_buffer[11] << 8) | mcu2_cmd_buffer[12];
 
             if (command == COMMAND_SD_READ) {
                 sectorToSend = sector;
                 numSectorsToSend = 1;
                 sendDataReady = true;
-                //printf("\nSendDataReady, sectorToSend=%lx, %x, ~ %lx, %x, numSectorsToSend=%x, actual sector count received=%x\n", sectorToSend, sectorToSend, sector, sector, numSectorsToSend, sectorCount);
             } else {
                 // not supported yet
                 printf("\nUnknown command: %x\n", command);
@@ -182,20 +199,18 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
             bufferIndex = 0;
             printf("\nError: Missing last byte\n");
         }
+
+        index++;
     } while (index < len);
 }
 
-BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE*2];
 // MCU2 will send data once it has the information it needs
-void send_data(uint64_t sector, uint32_t sectorCount) {
-    //printf("Sending data. Sector: %ld, Count: %d\n", sector, sectorCount);
+void send_data(uint32_t sector, uint32_t sectorCount) {
+    printf("Sending data. Sector: %d, Count: %d\n", sector, sectorCount);
     int loopCount = 0;
     do {
         loopCount++;
-        // read 1 sector at a time
-        // assume 512 byte sectors
-        // DRESULT dr = sd_read_blocks(pSD, diskReadBuffer, sector, 1);
-        DRESULT dr = disk_read(0, diskReadBuffer, sector, 1);
+        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
         
         if (dr != RES_OK) {
             printf("Error reading disk: %d\n", dr);
@@ -204,7 +219,7 @@ void send_data(uint64_t sector, uint32_t sectorCount) {
         sectorCount--;
 
         // Send sector worth of data
-        pio_spi_write8(diskReadBuffer, 512);
+        pio_spi_write8(diskReadBuffer, DISK_READ_BUFFER_SIZE);
 
     // Repeat if we are reading more than 1 sector
     } while(sectorCount > 1);
@@ -212,23 +227,39 @@ void send_data(uint64_t sector, uint32_t sectorCount) {
     printf("Sent %d sectors starting at Sector %ld\n", loopCount, sector);
 
     #if PRINT_BUFFER_AFTER_SEND == 1
-        printf("buffer for sector: %ld\n", sector);
-        for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
-                printf("%02x ", diskReadBuffer[diskBufferIndex]);
+        // printf("buffer for sector: %ld\n", sector);
+        // for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
+        //         printf("%02x ", diskReadBuffer[diskBufferIndex]);
+        //     }
+        // printf("\n");
+
+        uint8_t lastBufChar = 0;
+        for (int i = 0; i < 512; i++) {
+            uint8_t value = diskReadBuffer[i];
+            if (i % 2 == 1) {
+                uint16_t value16 = lastBufChar << 8 | value;
+                printf("%04x ", value16);
+            } else {
+                lastBufChar = value;
             }
-        printf("\n");
+
+            if (i % 10 == 0 && i != 0) {
+                printf("\n");
+			}
+        }
+
     #endif
 }
 
-void send_sd_card_data() {
-    // Reset send data flag
-    sendDataReady = false; 
+// void send_sd_card_data() {
+//     // Reset send data flag
+//     sendDataReady = false; 
 
-    // Send the data over uart back to MCU1 so the rom can read it
-    uint64_t sector = sectorToSend;
-    uint32_t numSectors = 1;
-    send_data(sector, numSectors);
-}
+//     // Send the data over uart back to MCU1 so the rom can read it
+//     uint64_t sector = sectorToSend;
+//     uint32_t numSectors = 1;
+//     send_data(sector, numSectors);
+// }
 
 // SD mount helper function
 static sd_card_t *sd_get_by_name(const char *const name) {
