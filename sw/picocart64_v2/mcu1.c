@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
+
 #include "pins_mcu1.h"
 #include "qspi_helper.h"
 #include "n64_pi_task.h"
@@ -20,7 +22,7 @@
 #include "utils.h"
 
 #include "sdcard/internal_sd_card.h"
-#include "pio_uart/pio_uart.h"
+#include "pio_spi/pio_spi.h"
 
 static const gpio_config_t mcu1_gpio_config[] = {
 	// PIO0 pins
@@ -60,12 +62,70 @@ static const gpio_config_t mcu1_gpio_config[] = {
     // PIN_MCU2_SCK        (27) // MCU2 GPIO pin 26: PIN_SPI1_SCK
     // PIN_MCU2_CS         (28) // MCU2 GPIO pin 29: PIN_SPI1_CS
     // PIN_MCU2_DIO        (29) // MCU2 GPIO pin 28: PIN_SPI1_RX
-	{PIN_MCU2_SCK, GPIO_IN, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
-	// {PIN_MCU2_SCK, GPIO_OUT, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1}, // used when spi master
+	// {PIN_MCU2_SCK, GPIO_IN, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
+	{PIN_MCU2_SCK, GPIO_OUT, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1}, // used when spi master
 	{PIN_MCU2_CS, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 	// {PIN_MCU2_CS, GPIO_OUT, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_UART},	// UART for now
 	{PIN_MCU2_DIO, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 };
+
+
+
+void mcu1_core1_entry() {
+	init_pio_spi(true, PIN_MCU2_SCK, PIN_MCU2_DIO, PIN_MCU2_CS); // run spi on the second core
+
+	/*
+	multicore_fifo_push_blocking((uintptr_t) &factorial); // function
+    multicore_fifo_push_blocking(TEST_NUM); // argument for function
+
+	then on main core 
+	res = multicore_fifo_pop_blocking(); // grab returned value
+	*/
+
+	pio_spi_inst_t pio_spi = {
+		.pio = pio1,
+		.sm = 0,
+		.cs_pin = -1
+	};
+
+	busy_wait_ms(500);
+
+	uint8_t cmd[1] = { 0xAA };
+	// pio_spi_write8(cmd, 1);
+	// cmd[0] = 0xBB;
+	// pio_spi_write8(cmd, 1);
+	// cmd[0] = 0xCC;
+	// pio_spi_write8(cmd, 1);
+	// cmd[0] = 0xDD;
+	// pio_spi_write8(cmd, 1);
+
+	uint8_t i = 0;
+
+	while (1) {
+		pio_spi_write8_blocking(&pio_spi, &i, 1);
+		i++;
+		if (i == 255) {
+			i = 0;
+		}
+		sleep_ms(300);
+		// tight_loop_contents();
+
+		// int32_t cmd = multicore_fifo_pop_blocking();
+
+		// switch (cmd) {
+		// 	case SEND_SD_READ_CMD:
+		// 		pc64_send_sd_read_command();
+		// 		break;
+		// 	default:
+		// 		break;
+		// }
+
+		// int32_t (*func)() = (int32_t(*)()) multicore_fifo_pop_blocking();
+        // int32_t p = multicore_fifo_pop_blocking();
+        // int32_t result = (*func)(p);
+        // multicore_fifo_push_blocking(result);
+	}
+}
 
 void mcu1_main(void)
 {
@@ -214,46 +274,7 @@ void mcu1_main(void)
 		pc64_uart_tx_buf[i] = 0xFFFF - i;
 	}
 
-	pio_uart_init(on_uart_rx_mcu1, PIN_MCU2_DIO, PIN_MCU2_CS);
-
-	// THIS COMMENTED OUT CODE WILL ECHO BACK DATA SENT FROM MCU2
-	// busy_wait_ms(2000);
-	// uint64_t s = 0;
-	// pc64_set_sd_read_sector(s);
-	// pc64_send_sd_read_command();
-	// bool hasPrinted = false;
-	// while(1) {
-	// 	tight_loop_contents();
-
-	// 	if (!sd_is_busy) {
-	// 		if (!hasPrinted) {
-	// 			hasPrinted = true;
-	// 			uart_tx_program_putc(0xBA);
-	// 			uart_tx_program_putc(bufferIndex >> 24);
-	// 			uart_tx_program_putc(bufferIndex >> 16);
-	// 			uart_tx_program_putc(bufferIndex >> 8);
-	// 			uart_tx_program_putc(bufferIndex);
-	// 			uart_tx_program_putc(0xAA);
-
-	// 			uart_tx_program_putc(0xBC);
-	// 			uart_tx_program_putc(rx_character_index >> 24);
-	// 			uart_tx_program_putc(rx_character_index >> 16);
-	// 			uart_tx_program_putc(rx_character_index >> 8);
-	// 			uart_tx_program_putc(rx_character_index);
-	// 			uart_tx_program_putc(0xAA);
-	// 			busy_wait_ms(100);
-	// 			for(int i = 0; i < 256; i++) {
-	// 				uint16_t value = pc64_uart_tx_buf[i];
-	// 				uart_tx_program_putc(value >> 8);
-	// 				uart_tx_program_putc(value);
-					
-	// 				busy_wait_ms(10);
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	// multicore_launch_core1(mcu1_core1_entry);
+	multicore_launch_core1(mcu1_core1_entry);
 
 	n64_pi_run();
 

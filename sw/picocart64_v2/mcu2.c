@@ -28,7 +28,7 @@
 #include "psram_inline.h"
 
 #include "sdcard/internal_sd_card.h"
-#include "pio_uart/pio_uart.h"
+#include "pio_spi/pio_spi.h"
 
 #define UART0_BAUD_RATE  (115200)
 
@@ -91,8 +91,8 @@ static const gpio_config_t mcu2_gpio_config[] = {
 	{PIN_CIC_DIO, GPIO_IN, false, true, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},	// Pulled up
 	{PIN_CIC_DCLK, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
 
-	// Configure as PIO that implements UART becase of the way the pins from MCU1 are connected to MCU2
-	{PIN_SPI1_SCK, GPIO_IN, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1}, 
+	// Configure as PIO that implements SPI becase of the way the pins from MCU1 are connected to MCU2
+	{PIN_SPI1_SCK, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO}, 
 	//{PIN_SPI1_TX, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1}, // not using
 	{PIN_SPI1_RX, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 	{PIN_SPI1_CS, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
@@ -139,7 +139,9 @@ void main_task_entry(__unused void *params)
 	printf("MCU2 Main Entry\n");
 
 	// Setup PIO UART
-	pio_uart_init(on_uart_rx_mcu2, PIN_SPI1_CS, PIN_SPI1_RX);
+	//pio_uart_init(on_uart_rx_mcu2, PIN_SPI1_CS, PIN_SPI1_RX);
+
+	init_pio_spi(false, -1, PIN_SPI1_CS, PIN_SPI1_RX);
 
 	// Boot MCU1
 	printf("Booting MCU1...\n");
@@ -148,10 +150,24 @@ void main_task_entry(__unused void *params)
 	// Mount the SD card
 	mount_sd();
 
-	int t = time_us_32();
-	int bc = 0;
+	pio_spi_inst_t pio_spi = {
+		.pio = pio1,
+		.sm = 0,
+		.cs_pin = -1
+	};
+
+	unsigned char mcu2_cmd_buffer[64];
+	printf("\n\n\n\n");
 	while (true) {
 		tight_loop_contents();
+
+		//pio_spi_read8(mcu2_cmd_buffer, 17);
+		//process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
+		pio_spi_read8_blocking(&pio_spi, mcu2_cmd_buffer, 8);
+		for (int i = 0; i < 8; i++) {
+			printf("%02x ", mcu2_cmd_buffer[i]);
+		}
+		
 
 		if(sendDataReady) {
 			send_sd_card_data();

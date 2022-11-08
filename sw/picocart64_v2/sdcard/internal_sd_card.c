@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 
 #include "ff.h" /* Obtains integer types */
 #include "diskio.h" /* Declarations of disk functions */
@@ -18,7 +19,7 @@
 
 #include "psram_inline.h"
 #include "internal_sd_card.h"
-#include "pio_uart/pio_uart.h"
+#include "pio_spi/pio_spi.h"
 
 #define SD_CARD_RX_READ_DEBUG 0
 
@@ -94,68 +95,33 @@ void pc64_send_sd_read_command(void) {
     uint64_t sector = sd_read_sector_start;
     uint32_t sectorCount = 1;
 
-    // Signal start
-    uart_tx_program_putc(COMMAND_START);
-    uart_tx_program_putc(COMMAND_START2);
+    uint8_t cmd[17] = {
+        COMMAND_START,
+        COMMAND_START2,
+        COMMAND_SD_READ,
+        (uint8_t)((sector & 0xFF00000000000000) >> 56),
+        (uint8_t)((sector & 0x00FF000000000000) >> 48),
+        (uint8_t)((sector & 0x0000FF0000000000) >> 40),
+        (uint8_t)((sector & 0x000000FF00000000) >> 32),
+        (uint8_t)((sector & 0x00000000FF000000) >> 24),
+        (uint8_t)((sector & 0x0000000000FF0000) >> 16),
+        (uint8_t)((sector & 0x000000000000FF00) >> 8),        
+        (uint8_t) (sector  & 0x00000000000000FF),
+        (uint8_t)((sectorCount & 0xFF000000) >> 24),
+        (uint8_t)((sectorCount & 0x00FF0000) >> 16),
+        (uint8_t)((sectorCount & 0x0000FF00) >> 8),
+        (uint8_t) (sectorCount & 0x000000FF),
+        COMMAND_FINISH,
+        COMMAND_FINISH2
+    };
 
-    // command
-    uart_tx_program_putc(COMMAND_SD_READ);
+    // Write all the commands
+    pio_spi_write8(cmd, 17);
 
-    // sector
-    uart_tx_program_putc((char)((sector & 0xFF00000000000000) >> 56));
-    uart_tx_program_putc((char)((sector & 0x00FF000000000000) >> 48));
-    uart_tx_program_putc((char)((sector & 0x0000FF0000000000) >> 40));
-    uart_tx_program_putc((char)((sector & 0x000000FF00000000) >> 32));
+    // Now read response
+    pio_spi_read16(pc64_uart_tx_buf, 512);
 
-    uart_tx_program_putc((char)((sector & 0x00000000FF000000) >> 24));
-    uart_tx_program_putc((char)((sector & 0x0000000000FF0000) >> 16));
-    uart_tx_program_putc((char)((sector & 0x000000000000FF00) >> 8));
-    uart_tx_program_putc((char)(sector  & 0x00000000000000FF));
-
-    // num sectors
-    uart_tx_program_putc((char)((sectorCount & 0xFF000000) >> 24));
-    uart_tx_program_putc((char)((sectorCount & 0x00FF0000) >> 16));
-    uart_tx_program_putc((char)((sectorCount & 0x0000FF00) >> 8));
-    uart_tx_program_putc((char)(sectorCount & 0x000000FF));
-
-    // Signal finish
-    uart_tx_program_putc(COMMAND_FINISH);
-    uart_tx_program_putc(COMMAND_FINISH2);
-}
-
-// bool is_sd_busy() {
-//     return sd_is_busy;
-// }
-
-// MCU1 will rx data from MCU2, this is SD card data
-static char lastBufChar = 0;
-volatile int rx_character_index = 0;
-void on_uart_rx_mcu1() {
-    while (uart_rx_program_is_readable()) {
-        char ch = uart_rx_program_getc();
-
-        // Combine two char values into a 16 bit value
-        // Only increment bufferIndex when adding a value
-        // else, store the ch into the holding field
-        if (rx_character_index % 2 == 1) {
-            uint16_t value = lastBufChar << 8 | ch;
-            pc64_uart_tx_buf[bufferIndex] = value;
-            bufferIndex += 1;
-        } else {
-            lastBufChar = ch;
-        }
-
-        // always increment this value
-        rx_character_index++;
-        
-        // We expect characters = DISK_READ_BUFFER_SIZE, as we are sending values as 8bit chars.
-        // So we are done once we have read DISK_READ_BUFFER_SIZE characters.
-        if (rx_character_index >= DISK_READ_BUFFER_SIZE) {
-            bufferIndex = 0;
-            rx_character_index = 0;
-            sd_is_busy = false;
-        }
-    }
+    sd_is_busy = false;
 }
 
 // MCU2 listens for MCU1 commands and will respond accordingly
@@ -163,13 +129,13 @@ int startIndex = 0;
 bool mayHaveStart = false;
 bool mayHaveFinish = false;
 bool receivingData = false;
-unsigned char mcu2_cmd_buffer[64];
-void on_uart_rx_mcu2() {
+void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
     // read
-    while (uart_rx_program_is_readable()) {
-        char ch = uart_rx_program_getc();
+    int index = 0;
+    do {
+        char ch = mcu2_cmd_buffer[index++];
         
-        // printf("%02x ", ch);
+        printf("%02x ", ch);
         // if (ch == 0xAA) {
         //     printf("\n");
         // }
@@ -216,7 +182,7 @@ void on_uart_rx_mcu2() {
             bufferIndex = 0;
             printf("\nError: Missing last byte\n");
         }
-    }
+    } while (index < len);
 }
 
 BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE*2];
@@ -238,14 +204,7 @@ void send_data(uint64_t sector, uint32_t sectorCount) {
         sectorCount--;
 
         // Send sector worth of data
-        for (int diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
-            // wait until uart is writable
-            while (!uart_tx_program_is_writable()) {
-                tight_loop_contents();
-            }
-
-            uart_tx_program_putc(diskReadBuffer[diskBufferIndex]);
-        }
+        pio_spi_write8(diskReadBuffer, 512);
 
     // Repeat if we are reading more than 1 sector
     } while(sectorCount > 1);

@@ -25,7 +25,7 @@
 #include "utils.h"
 
 #include "sdcard/internal_sd_card.h"
-#include "pio_uart/pio_uart.h"
+#include "pio_spi/pio_spi.h"
 
 // The rom to load in normal .z64, big endian, format
 #include "rom_vars.h"
@@ -67,11 +67,7 @@ static inline uint32_t n64_pi_get_value(PIO pio)
 #if 0
 	ringbuf_add(ringbuf, value);
 #elif 0
-	uart_tx_program_putc((value & 0xFF000000) >> 24);
-	uart_tx_program_putc((value & 0x00FF0000) >> 16);
-	uart_tx_program_putc((value & 0x0000FF00) >> 8);
-	uart_tx_program_putc((value & 0x000000FF));
-	uart_tx_program_putc('\n');
+	
 #endif
 
 	return value;
@@ -306,12 +302,6 @@ void n64_pi_run(void)
 					// // Get the next command/address
 					// addr = n64_pi_get_value(pio);
 					// if (addr != 0) {
-					// 	uart_tx_program_putc(0xBF);
-					// 	uart_tx_program_putc(addr >> 24);
-					// 	uart_tx_program_putc(addr >> 16);
-					// 	uart_tx_program_putc(addr >> 8);
-					// 	uart_tx_program_putc(addr);
-					// 	uart_tx_program_putc(0xAA);
 					// 	// Handle 16-bit reads even if we shouldn't get them here.
 					// 	continue;
 					// }
@@ -322,12 +312,6 @@ void n64_pi_run(void)
 
 				} else {
 					// New address
-					// uart_tx_program_putc(0xBA);
-					// uart_tx_program_putc(addr >> 24);
-					// uart_tx_program_putc(addr >> 16);
-					// uart_tx_program_putc(addr >> 8);
-					// uart_tx_program_putc(addr);
-					// uart_tx_program_putc(0xAA);
 					break;
 				}
 			} while (1);
@@ -347,12 +331,6 @@ void n64_pi_run(void)
 					last_addr += 2;
 				} else {
 					// New address
-					// uart_tx_program_putc(0xBC);
-					// uart_tx_program_putc(addr >> 24);
-					// uart_tx_program_putc(addr >> 16);
-					// uart_tx_program_putc(addr >> 8);
-					// uart_tx_program_putc(addr);
-					// uart_tx_program_putc(0xAA);
 					break;
 				}
 			} while (1);
@@ -391,12 +369,6 @@ void n64_pi_run(void)
 
 					// if (addr != 0) {
 					// 	// Handle 16-bit reads even if we shouldn't get them here.
-					// 	uart_tx_program_putc(0xEE);
-					// 	uart_tx_program_putc(addr >> 24);
-					// 	uart_tx_program_putc(addr >> 16);
-					// 	uart_tx_program_putc(addr >> 8);
-					// 	uart_tx_program_putc(addr);
-					// 	uart_tx_program_putc(0xAA);
 					// 	last_addr = addr;
 					// 	continue;
 					// }
@@ -424,7 +396,8 @@ void n64_pi_run(void)
 
 					case PC64_COMMAND_SD_READ:
 						write_word |= n64_pi_get_value(pio) >> 16;
-						pc64_send_sd_read_command();
+						//pc64_send_sd_read_command();
+						multicore_fifo_push_blocking(SEND_SD_READ_CMD); // tell the other core to start sending data
 						break;
 
 					case PC64_REGISTER_SD_READ_SECTOR0:
@@ -456,12 +429,6 @@ void n64_pi_run(void)
 					last_addr += addr_advance;
 				} else {
 					// New address
-					// uart_tx_program_putc(0xEF);
-					// uart_tx_program_putc(addr >> 24);
-					// uart_tx_program_putc(addr >> 16);
-					// uart_tx_program_putc(addr >> 8);
-					// uart_tx_program_putc(addr);
-					// uart_tx_program_putc(0xAA);
 					break;
 				}
 			} while (1);

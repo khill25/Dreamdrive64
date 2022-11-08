@@ -36,8 +36,9 @@ extern volatile bool sd_is_busy;
 //bool is_sd_busy();
 
 // UART RX methods, unique per MCU
-void on_uart_rx_mcu1(void);
-void on_uart_rx_mcu2(void);
+// void on_uart_rx_mcu1(void);
+// void on_uart_rx_mcu2(void);
+void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len);
 void send_sd_card_data();
 
 // Internal method that is called once MCU2 has data ready to return MCU1

@@ -18,7 +18,7 @@ add_executable(picocart64_v2
 
     ws2812/ws2812.c
 
-    pio_uart/pio_uart.c
+    pio_spi/pio_spi.c
 )
 
 if(NOT DEFINED REGION)
@@ -116,7 +116,7 @@ pico_enable_stdio_usb(picocart64_v2 0)
 pico_enable_stdio_uart(picocart64_v2 1)
 
 pico_generate_pio_header(picocart64_v2 
-    ${CMAKE_CURRENT_LIST_DIR}/pio_uart/pio_uart.pio
+    ${CMAKE_CURRENT_LIST_DIR}/pio_spi/pio_spi.pio
 )
 
 # use custom linker script
