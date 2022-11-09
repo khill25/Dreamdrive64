@@ -141,8 +141,6 @@ void main_task_entry(__unused void *params)
 	// Setup PIO UART
 	//pio_uart_init(on_uart_rx_mcu2, PIN_SPI1_CS, PIN_SPI1_RX);
 
-	init_pio_spi(false, -1, PIN_SPI1_CS, PIN_SPI1_RX);
-
 	// Boot MCU1
 	printf("Booting MCU1...\n");
 	gpio_put(PIN_MCU1_RUN, 1);
@@ -150,32 +148,41 @@ void main_task_entry(__unused void *params)
 	// Mount the SD card
 	mount_sd();
 
-	pio_spi_inst_t pio_spi = {
-		.pio = pio1,
-		.sm = 0,
-		.cs_pin = -1
-	};
+	init_pio_spi(false, -1, PIN_SPI1_CS, PIN_SPI1_RX);
 
 	unsigned char mcu2_cmd_buffer[64];
-	uint8_t cmd[1];
-	uint8_t n[1];
-	int v = 0;
-	printf("\n\n\n\n");
 	while (true) {
 		tight_loop_contents();
 
-		// pio_spi_read8(mcu2_cmd_buffer, 17);
-		// process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
+		pio_spi_read8(mcu2_cmd_buffer, 17);
+		process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
 
-		// if(sendDataReady) {
-		// 	// send_sd_card_data();
-		// 	send_data(sectorToSend, 1);
-		// }
-		cmd[0] = v++;
-		pio_spi_write8(cmd, 1);
-		pio_spi_read8(mcu2_cmd_buffer, 1);
-		sleep_ms(1000);
-		printf("%02x ", mcu2_cmd_buffer[0]);
+		if(sendDataReady) {
+			send_data(sectorToSend, 1);
+		}
+
+		// cmd[0] = v++;
+		// pio_spi_read8(cmd, 1);
+		// pio_spi_write8(buf2, 512);
+
+		// pio_spi_read8(buf, 512);
+
+		// printf("!!!\n");
+		// uint8_t lastBufChar = 0;
+        // for (int i = 0; i < 512; i++) {
+        //     uint8_t value = buf[i];
+        //     if (i % 2 == 1) {
+        //         uint16_t value16 = value << 8 | lastBufChar;
+        //         printf("%04x ", value16);
+        //     } else {
+        //         lastBufChar = value;
+        //     }
+
+        //     if (i % 10 == 0 && i != 0) {
+        //         printf("\n");
+		// 	}
+        // }
+		//printf("%02x ", mcu2_cmd_buffer[0]);
 		
 
 #if 0

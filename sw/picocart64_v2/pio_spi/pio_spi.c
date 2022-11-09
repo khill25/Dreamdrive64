@@ -25,7 +25,7 @@ void init_pio_spi_master(int clkPin, int rxPin, int txPin) {
     uint offset = pio_add_program(pio_spi.pio, &spi_master_program);
     pio_spi_master_init(pio_spi.pio, pio_spi.sm, offset,
                         8,       // 8 bits per SPI frame
-                        8,  // 1 MHz @ 125 clk_sys
+                        32,  // 1 MHz @ 125 clk_sys
                         false,   // CPOL = 0
                         clkPin,
                         txPin,

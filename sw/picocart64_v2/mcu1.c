@@ -82,28 +82,24 @@ void mcu1_core1_entry() {
 	res = multicore_fifo_pop_blocking(); // grab returned value
 	*/
 
-	pio_spi_inst_t pio_spi = {
-		.pio = pio1,
-		.sm = 0,
-		.cs_pin = -1
-	};
-
-	uint8_t buf[] = { 0 };
-	uint8_t n[] = { 0 };
 	while (1) {
 		// tight_loop_contents();
 
-		// int32_t cmd = multicore_fifo_pop_blocking();
+		int32_t cmd = multicore_fifo_pop_blocking();
 
-		// switch (cmd) {
-		// 	case SEND_SD_READ_CMD:
-		// 		pc64_send_sd_read_command();
-		// 		break;
-		// 	default:
-		// 		break;
-		// }
-		pio_spi_read8(buf, 1);
-		pio_spi_write8(buf, 1);
+		switch (cmd) {
+			case SEND_SD_READ_CMD:
+				// Block cart while waiting for data
+    			sd_is_busy = true;
+				// If you comment out this line
+				// the transfer to the n64 will contain the correct
+				// inital data the buffer was seeded with
+				pc64_send_sd_read_command();
+				sd_is_busy = false;
+				break;
+			default:
+				break;
+		}
 	}
 }
 
@@ -254,8 +250,8 @@ void mcu1_main(void)
 		pc64_uart_tx_buf[i] = 0xFFFF - i;
 	}
 
-	// multicore_launch_core1(mcu1_core1_entry);
-	mcu1_core1_entry();
+	multicore_launch_core1(mcu1_core1_entry);
+	// mcu1_core1_entry();
 
 	n64_pi_run();
 

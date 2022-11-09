@@ -34,7 +34,7 @@
 #define COMMAND_SD_WRITE 0x77 // literally the w char
 #define DISK_READ_BUFFER_SIZE 512
 
-#define PRINT_BUFFER_AFTER_SEND 1
+#define PRINT_BUFFER_AFTER_SEND 0
 
 int PC64_MCU_ID = -1;
 
@@ -42,7 +42,7 @@ __volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
 uint8_t diskReadBuffer[DISK_READ_BUFFER_SIZE];
 
 __volatile uint16_t sd_sector_registers[4];
-__volatile uint64_t sd_read_sector_start;
+__volatile uint32_t sd_read_sector_start;
 __volatile uint32_t sd_read_sector_count;
 __volatile char sd_selected_rom_title[256];
 __volatile bool sd_is_busy = false;
@@ -89,24 +89,29 @@ void pc64_set_sd_rom_selection(char* title) {
 }
 
 void pc64_send_sd_read_command(void) {
-    // Block cart while waiting for data
-    sd_is_busy = true;
-
-    uint64_t sector = sd_read_sector_start;
+    uint32_t sector = sd_read_sector_start;
     uint32_t sectorCount = 1;
 
     uint8_t cmd[17] = {
         COMMAND_START,
         COMMAND_START2,
         COMMAND_SD_READ,
-        (uint8_t)((sector & 0xFF00000000000000) >> 56),
-        (uint8_t)((sector & 0x00FF000000000000) >> 48),
-        (uint8_t)((sector & 0x0000FF0000000000) >> 40),
-        (uint8_t)((sector & 0x000000FF00000000) >> 32),
-        (uint8_t)((sector & 0x00000000FF000000) >> 24),
-        (uint8_t)((sector & 0x0000000000FF0000) >> 16),
-        (uint8_t)((sector & 0x000000000000FF00) >> 8),        
-        (uint8_t) (sector  & 0x00000000000000FF),
+        // (uint8_t)((sector & 0xFF00000000000000) >> 56),
+        // (uint8_t)((sector & 0x00FF000000000000) >> 48),
+        // (uint8_t)((sector & 0x0000FF0000000000) >> 40),
+        // (uint8_t)((sector & 0x000000FF00000000) >> 32),
+        // (uint8_t)((sector & 0x00000000FF000000) >> 24),
+        // (uint8_t)((sector & 0x0000000000FF0000) >> 16),
+        // (uint8_t)((sector & 0x000000000000FF00) >> 8),        
+        // (uint8_t) (sector  & 0x00000000000000FF),
+        (uint8_t)(0),
+        (uint8_t)(0),
+        (uint8_t)(0),
+        (uint8_t)(0),
+        (uint8_t)((sector & 0xFF000000) >> 24),
+        (uint8_t)((sector & 0x00FF0000) >> 16),
+        (uint8_t)((sector & 0x0000FF00) >> 8),        
+        (uint8_t) (sector & 0x000000FF),
         (uint8_t)((sectorCount & 0xFF000000) >> 24),
         (uint8_t)((sectorCount & 0x00FF0000) >> 16),
         (uint8_t)((sectorCount & 0x0000FF00) >> 8),
@@ -136,8 +141,6 @@ void pc64_send_sd_read_command(void) {
             lastBufChar = value;
         }
     }
-
-    sd_is_busy = false;
 }
 
 // MCU2 listens for MCU1 commands and will respond accordingly
@@ -152,7 +155,7 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
     do {
         char ch = mcu2_cmd_buffer[index];
         
-        printf("%02x ", ch);
+        // printf("%02x ", ch);
         // if (ch == 0xAA) {
         //     printf("\n");
         // }
@@ -206,7 +209,7 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
 
 // MCU2 will send data once it has the information it needs
 void send_data(uint32_t sector, uint32_t sectorCount) {
-    printf("Sending data. Sector: %d, Count: %d\n", sector, sectorCount);
+    //printf("Sending data. Sector: %d, Count: %d\n", sector, sectorCount);
     int loopCount = 0;
     do {
         loopCount++;
@@ -224,7 +227,7 @@ void send_data(uint32_t sector, uint32_t sectorCount) {
     // Repeat if we are reading more than 1 sector
     } while(sectorCount > 1);
 
-    printf("Sent %d sectors starting at Sector %ld\n", loopCount, sector);
+    printf("Sent %d sectors starting at Sector %d\n", loopCount, sector);
 
     #if PRINT_BUFFER_AFTER_SEND == 1
         // printf("buffer for sector: %ld\n", sector);
@@ -237,7 +240,7 @@ void send_data(uint32_t sector, uint32_t sectorCount) {
         for (int i = 0; i < 512; i++) {
             uint8_t value = diskReadBuffer[i];
             if (i % 2 == 1) {
-                uint16_t value16 = lastBufChar << 8 | value;
+                uint16_t value16 = value << 8 | lastBufChar;
                 printf("%04x ", value16);
             } else {
                 lastBufChar = value;
