@@ -20,6 +20,7 @@ extern __volatile uint32_t sectorToSend;
 // Communucation buffer (Also used for sd access from roms)
 extern __volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
 extern __volatile bool sd_is_busy;
+extern uint8_t diskReadBuffer[SD_CARD_SECTOR_SIZE];
 
 // set the sector to start reading from
 void pc64_set_sd_read_sector(uint32_t sector);

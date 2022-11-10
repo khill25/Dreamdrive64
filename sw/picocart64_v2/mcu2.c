@@ -150,16 +150,30 @@ void main_task_entry(__unused void *params)
 
 	init_pio_spi(false, -1, PIN_SPI1_CS, PIN_SPI1_RX);
 
+	uint8_t b[512];
 	unsigned char mcu2_cmd_buffer[64];
 	while (true) {
 		tight_loop_contents();
+		
+		printf("\nReady for data!\n");
 
-		pio_spi_read8(mcu2_cmd_buffer, 17);
-		process_mcu2_cmd_buffer(mcu2_cmd_buffer, 17);
+		pio_spi_read8(mcu2_cmd_buffer, 16);
+		process_mcu2_cmd_buffer(mcu2_cmd_buffer, 16);
 
 		if(sendDataReady) {
 			send_data(sectorToSend, 1);
+
+			pio_spi_read8(b, 512);
+			printf("Finished read, outting looped back data\n");
+        	for (uint diskBufferIndex = 0; diskBufferIndex < 512; diskBufferIndex++) {
+            	printf("%02x ", b[diskBufferIndex]);
+            	if (diskBufferIndex % 20 == 0 && diskBufferIndex != 0) {
+                	printf("\n");
+            	}
+        	}
 		}
+
+		printf("\nFinished loop\n");
 
 		// cmd[0] = v++;
 		// pio_spi_read8(cmd, 1);

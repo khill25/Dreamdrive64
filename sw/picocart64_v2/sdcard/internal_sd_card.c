@@ -45,7 +45,7 @@ __volatile uint16_t sd_sector_registers[4];
 __volatile uint32_t sd_read_sector_start;
 __volatile uint32_t sd_read_sector_count;
 __volatile char sd_selected_rom_title[256];
-__volatile bool sd_is_busy = false;
+__volatile bool sd_is_busy = true;
 
 // Variables used to signal sd data send from mcu2 -> mcu1 and the data that needs to be sent
 __volatile bool sendDataReady = false;
@@ -92,7 +92,7 @@ void pc64_send_sd_read_command(void) {
     uint32_t sector = sd_read_sector_start;
     uint32_t sectorCount = 1;
 
-    uint8_t cmd[17] = {
+    uint8_t cmd[16] = {
         COMMAND_START,
         COMMAND_START2,
         COMMAND_SD_READ,
@@ -116,31 +116,11 @@ void pc64_send_sd_read_command(void) {
         (uint8_t)((sectorCount & 0x00FF0000) >> 16),
         (uint8_t)((sectorCount & 0x0000FF00) >> 8),
         (uint8_t) (sectorCount & 0x000000FF),
-        COMMAND_FINISH,
-        COMMAND_FINISH2
+        COMMAND_FINISH
     };
 
     // Write all the commands
-    pio_spi_write8(cmd, 17);
-
-    // Now read response
-    pio_spi_read8(diskReadBuffer, 512);
-
-    uint8_t lastBufChar = 0;
-    int bufferIndex = 0;
-    for (int i = 0; i < 512; i++) {
-        uint8_t value = diskReadBuffer[i];
-        // Combine two char values into a 16 bit value
-        // Only increment bufferIndex when adding a value
-        // else, store the ch into the holding field
-        if (i % 2 == 1) {
-            uint16_t value16 = lastBufChar << 8 | value;
-            pc64_uart_tx_buf[bufferIndex] = value16;
-            bufferIndex += 1;
-        } else {
-            lastBufChar = value;
-        }
-    }
+    pio_spi_write8(cmd, 16);
 }
 
 // MCU2 listens for MCU1 commands and will respond accordingly
@@ -166,7 +146,6 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
             receivingData = true;
         } else if (ch == COMMAND_FINISH && receivingData) {
             mayHaveFinish = true;
-        } else if (ch == COMMAND_FINISH2 && receivingData) {
             receivingData = false;
         } else if (receivingData && !mayHaveFinish) {
             mcu2_cmd_buffer[bufferIndex] = ch;
@@ -207,52 +186,63 @@ void process_mcu2_cmd_buffer(unsigned char* mcu2_cmd_buffer, int len) {
     } while (index < len);
 }
 
-// MCU2 will send data once it has the information it needs
-void send_data(uint32_t sector, uint32_t sectorCount) {
-    //printf("Sending data. Sector: %d, Count: %d\n", sector, sectorCount);
-    int loopCount = 0;
-    do {
-        loopCount++;
-        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
+void send_data(uint32_t sector, uint32_t count) {
+    DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
         
-        if (dr != RES_OK) {
-            printf("Error reading disk: %d\n", dr);
-        } 
-        
-        sectorCount--;
-
+    if (dr != RES_OK) {
+        printf("Error reading disk: %d\n", dr);
+    } else {
         // Send sector worth of data
         pio_spi_write8(diskReadBuffer, DISK_READ_BUFFER_SIZE);
-
-    // Repeat if we are reading more than 1 sector
-    } while(sectorCount > 1);
-
-    printf("Sent %d sectors starting at Sector %d\n", loopCount, sector);
-
-    #if PRINT_BUFFER_AFTER_SEND == 1
-        // printf("buffer for sector: %ld\n", sector);
-        // for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
-        //         printf("%02x ", diskReadBuffer[diskBufferIndex]);
-        //     }
-        // printf("\n");
-
-        uint8_t lastBufChar = 0;
-        for (int i = 0; i < 512; i++) {
-            uint8_t value = diskReadBuffer[i];
-            if (i % 2 == 1) {
-                uint16_t value16 = value << 8 | lastBufChar;
-                printf("%04x ", value16);
-            } else {
-                lastBufChar = value;
-            }
-
-            if (i % 10 == 0 && i != 0) {
-                printf("\n");
-			}
-        }
-
-    #endif
+    }
 }
+
+// MCU2 will send data once it has the information it needs
+// void send_data(uint32_t sector, uint32_t sectorCount) {
+//     //printf("Sending data. Sector: %d, Count: %d\n", sector, sectorCount);
+//     int loopCount = 0;
+//     do {
+//         loopCount++;
+//         DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
+        
+//         if (dr != RES_OK) {
+//             printf("Error reading disk: %d\n", dr);
+//         } 
+        
+//         sectorCount--;
+
+//         // Send sector worth of data
+//         pio_spi_write8(diskReadBuffer, DISK_READ_BUFFER_SIZE);
+
+//     // Repeat if we are reading more than 1 sector
+//     } while(sectorCount > 1);
+
+//     printf("Sent %d sectors starting at Sector %d\n", loopCount, sector);
+
+//     #if PRINT_BUFFER_AFTER_SEND == 1
+//         // printf("buffer for sector: %ld\n", sector);
+//         // for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
+//         //         printf("%02x ", diskReadBuffer[diskBufferIndex]);
+//         //     }
+//         // printf("\n");
+
+//         uint8_t lastBufChar = 0;
+//         for (int i = 0; i < 512; i++) {
+//             uint8_t value = diskReadBuffer[i];
+//             if (i % 2 == 1) {
+//                 uint16_t value16 = value << 8 | lastBufChar;
+//                 printf("%04x ", value16);
+//             } else {
+//                 lastBufChar = value;
+//             }
+
+//             if (i % 10 == 0 && i != 0) {
+//                 printf("\n");
+// 			}
+//         }
+
+//     #endif
+// }
 
 // void send_sd_card_data() {
 //     // Reset send data flag

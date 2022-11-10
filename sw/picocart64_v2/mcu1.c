@@ -82,8 +82,9 @@ void mcu1_core1_entry() {
 	res = multicore_fifo_pop_blocking(); // grab returned value
 	*/
 
+	uint8_t signalCmdBuffer[] = { 0 };
 	while (1) {
-		// tight_loop_contents();
+		tight_loop_contents();
 
 		int32_t cmd = multicore_fifo_pop_blocking();
 
@@ -95,7 +96,30 @@ void mcu1_core1_entry() {
 				// the transfer to the n64 will contain the correct
 				// inital data the buffer was seeded with
 				pc64_send_sd_read_command();
+				
+				// Now read response
+				pio_spi_read8(diskReadBuffer, 512);
+				pio_spi_write8(diskReadBuffer, 512);
+
+				uint8_t lastBufChar = 0;
+				int bufferIndex = 0;
+				for (int i = 0; i < 512; i++) {
+					uint8_t value = diskReadBuffer[i];
+					// Combine two char values into a 16 bit value
+					// Only increment bufferIndex when adding a value
+					// else, store the ch into the holding field
+					if (i % 2 == 1) {
+						uint16_t value16 = lastBufChar << 8 | value;
+						pc64_uart_tx_buf[bufferIndex] = value16;
+						bufferIndex += 1;
+					} else {
+						lastBufChar = value;
+					}
+				}
+
+				// Now that the data is written to the array, go ahead and release the lock
 				sd_is_busy = false;
+
 				break;
 			default:
 				break;
@@ -248,6 +272,7 @@ void mcu1_main(void)
 	// Put something in this array for sanity testing
 	for(int i = 0; i < 512; i++) {
 		pc64_uart_tx_buf[i] = 0xFFFF - i;
+		diskReadBuffer[i] = i;
 	}
 
 	multicore_launch_core1(mcu1_core1_entry);

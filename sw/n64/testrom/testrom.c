@@ -90,12 +90,16 @@ void test_tx_buffer_read(uint8_t *buff, uint64_t sector, uint32_t dmaReadSize) {
 	if(pc64_sd_wait() == 0) {
 		int dmaSize = 512;
 		printf("\nDMA size of(%d) buff8\n", dmaSize);
-		wait_ms(40);
 
 		data_cache_hit_writeback_invalidate(buff, dmaSize);
 		pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaSize);
 
-	
+		data_cache_hit_writeback_invalidate(buff, dmaSize);
+		pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaSize);
+
+		data_cache_hit_writeback_invalidate(buff, dmaSize);
+		pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaSize);
+
 		// Make a second read because it will work
 		// data_cache_hit_writeback_invalidate(buff, dmaSize);
 		// pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaSize);
