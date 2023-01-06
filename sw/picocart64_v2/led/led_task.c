@@ -16,7 +16,7 @@ void led_task_entry(__unused void *params)
 #if 0
 	ws2812_init(pio0, 21);		// PicoCart v1
 #else
-	ws2812_init(pio0, PIN_LED);
+	ws2812_init(pio1, PIN_LED);
 #endif
 
 	int i = 0;

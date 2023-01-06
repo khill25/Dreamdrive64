@@ -40,14 +40,14 @@ DAT2               6
 
 */
 
-void spi_dma_isr();
+// void spi_dma_isr();
 
 // Hardware Configuration of SPI "objects"
 // Note: multiple SD cards can be driven by one SPI if they use different slave
 // selects.
 static spi_t spis[] = {			// One for each SPI.
 	{
-	 .hw_inst = spi0,			// SPI component
+	 //.hw_inst = spi0,			// SPI component
 	 .miso_gpio = PIN_SD_DAT0_UART1_TX,
 	 .mosi_gpio = PIN_SD_CMD,
 	 .sck_gpio = PIN_SD_CLK,
@@ -60,7 +60,8 @@ static spi_t spis[] = {			// One for each SPI.
 	 .baud_rate = 25 * 1000 * 1000,	// Actual frequency: 20833333. Has
 	 // worked for me with SanDisk.        
 
-	 .dma_isr = spi_dma_isr}
+	//  .dma_isr = spi_dma_isr
+	 }
 };
 
 // Hardware Configuration of the SD Card "objects"
@@ -82,10 +83,10 @@ static sd_card_t sd_cards[] = {	// One for each SD card
 	 .m_Status = STA_NOINIT}
 };
 
-void spi_dma_isr()
-{
-	spi_irq_handler(&spis[0]);
-}
+// void spi_dma_isr()
+// {
+// 	spi_irq_handler(&spis[0]);
+// }
 
 /* ********************************************************************** */
 size_t sd_get_num()

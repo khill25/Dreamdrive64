@@ -170,7 +170,7 @@ void load_selected_rom() {
 
 void load_new_rom(char* filename) {
     sd_is_busy = true;
-    char buf[256];
+    char buf[512];
     sd_card_t *pSD = sd_get_by_num(0);
 	FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
 	if (FR_OK != fr) {
@@ -203,15 +203,15 @@ void load_new_rom(char* filename) {
 	int total = 0;
 	uint64_t t0 = to_us_since_boot(get_absolute_time());
     int currentPSRAMChip = 3;
-	do {
+	do {        
         fr = f_read(&fil, buf, sizeof(buf), &len);
         program_write_buf(total, buf, len);
 		total += len;
 
         int newChip = psram_addr_to_chip(total);
         if (newChip != currentPSRAMChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
-            printf("Changing psram chip. Was: %d, now: %d\n", currentPSRAMChip, newChip);
-            printf("Total bytes: %d. Bytes remaining = %ld\n", total, (filinfo.fsize - total));
+            // printf("Changing psram chip. Was: %d, now: %d\n", currentPSRAMChip, newChip);
+            // printf("Total bytes: %d. Bytes remaining = %ld\n", total, (filinfo.fsize - total));
             currentPSRAMChip = newChip;
             psram_set_cs(currentPSRAMChip); // Switch the PSRAM chip
         }

@@ -152,7 +152,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 		}
 
 	// Do a rom load test after x seconds
-		if(test_load && t2 > 3) {
+		if(test_load && t2 > 5) {
 			test_load = false;
 
 			pc64_set_sd_rom_selection("GoldenEye 007 (U) [!].z64", 25);
