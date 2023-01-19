@@ -24,6 +24,7 @@
 #include "psram.h"
 #include "ringbuf.h"
 #include "joybus/joybus.h"
+#include "n64_cic.h"
 
 #include "utils.h"
 
@@ -188,6 +189,7 @@ void load_new_rom(char* filename) {
 
     // TODO read the file header and lookup the eeprom save size
     // TODO send the eeprom save size to mcu1
+    eeprom_type = EEPROM_TYPE_4K;
 
     printf("Sending eeprom type to mcu1\n");
     uart_tx_program_putc(COMMAND_START);
@@ -195,8 +197,8 @@ void load_new_rom(char* filename) {
     uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
     uart_tx_program_putc(0);
     uart_tx_program_putc(2);
-    uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
-    uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
+    uart_tx_program_putc((uint8_t)(eeprom_type >> 8));
+    uart_tx_program_putc((uint8_t)(eeprom_type));
 
     // Busy wait for a few cycles then send eeprom data
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
@@ -301,6 +303,9 @@ void load_new_rom(char* filename) {
 
     qspi_disable();
     printf("Rom Loaded, MCU2 qspi: OFF, sending mcu1 rom loaded command\n");
+
+    n64_cic_set_seed(5);
+    n64_cic_reset();
 
     // Let MCU1 know that we are finished
     uart_tx_program_putc(COMMAND_START);

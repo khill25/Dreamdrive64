@@ -61,7 +61,6 @@ Data Line, Bidir (DIO):  CIC Pin 15
 #endif
 
 /* SEEDs */
-
 // 6102/7101
 #define CIC6102_SEED 0x3F
 
@@ -83,22 +82,22 @@ Data Line, Bidir (DIO):  CIC Pin 15
 /* CHECKSUMs */
 
 // 6102/7101
-#define CIC6102_CHECKSUM 0xa, 0x5, 0x3, 0x6, 0xc, 0x0, 0xf, 0x1, 0xd, 0x8, 0x5, 0x9
+const uint8_t CIC6102_CHECKSUM[] = {0xa, 0x5, 0x3, 0x6, 0xc, 0x0, 0xf, 0x1, 0xd, 0x8, 0x5, 0x9};
 
 // 6101
-#define CIC6101_CHECKSUM 0x4, 0x5, 0xC, 0xC, 0x7, 0x3, 0xE, 0xE, 0x3, 0x1, 0x7, 0xA
+const uint8_t CIC6101_CHECKSUM[] = {0x4, 0x5, 0xC, 0xC, 0x7, 0x3, 0xE, 0xE, 0x3, 0x1, 0x7, 0xA};
 
 // 6103/7103
-#define CIC6103_CHECKSUM 0x5, 0x8, 0x6, 0xf, 0xd, 0x4, 0x7, 0x0, 0x9, 0x8, 0x6, 0x7
+const uint8_t CIC6103_CHECKSUM[] = {0x5, 0x8, 0x6, 0xf, 0xd, 0x4, 0x7, 0x0, 0x9, 0x8, 0x6, 0x7};
 
 // 6105/7105
-#define CIC6105_CHECKSUM 0x8, 0x6, 0x1, 0x8, 0xA, 0x4, 0x5, 0xB, 0xC, 0x2, 0xD, 0x3
+const uint8_t CIC6105_CHECKSUM[] = {0x8, 0x6, 0x1, 0x8, 0xA, 0x4, 0x5, 0xB, 0xC, 0x2, 0xD, 0x3};
 
 // 6106/7106
-#define CIC6106_CHECKSUM 0x2, 0xB, 0xB, 0xA, 0xD, 0x4, 0xE, 0x6, 0xE, 0xB, 0x7, 0x4
+const uint8_t CIC6106_CHECKSUM[] = {0x2, 0xB, 0xB, 0xA, 0xD, 0x4, 0xE, 0x6, 0xE, 0xB, 0x7, 0x4};
 
 // 7102
-#define CIC7102_CHECKSUM 0x4, 0x4, 0x1, 0x6, 0x0, 0xE, 0xC, 0x5, 0xD, 0x9, 0xA, 0xF
+const uint8_t CIC7102_CHECKSUM[] = {0x4, 0x4, 0x1, 0x6, 0x0, 0xE, 0xC, 0x5, 0xD, 0x9, 0xA, 0xF};
 
 static void EncodeRound(unsigned char index);
 static void CicRound(unsigned char *);
@@ -109,13 +108,10 @@ static uint8_t pin_dclk;
 static uint8_t pin_dio;
 
 /* Select SEED and CHECKSUM here */
-const unsigned char _CicSeed = CIC6102_SEED;
-// const unsigned char _CicSeed = CIC6105_SEED;
+unsigned char _CicSeed = CIC6102_SEED;
+// unsigned char _CicSeed = CIC6105_SEED;
 
-const unsigned char _CicChecksum[] = {
-	CIC6102_CHECKSUM
-		// CIC6105_CHECKSUM
-};
+unsigned char _CicChecksum[12];
 
 /* NTSC initial RAM */
 const unsigned char _CicRamInitNtsc[] = {
@@ -490,6 +486,47 @@ static void InitRam(unsigned char isPal)
 	}
 }
 
+void n64_cic_set_seed(uint8_t seed) {
+	printf("Setting CIC Seed to %u\n", seed);
+
+	switch (seed) {
+		case CIC_SEED_6101: 
+			_CicSeed = CIC6101_SEED;
+			memcpy(_CicChecksum, CIC6101_CHECKSUM, 12);
+			break;
+		case CIC_SEED_6102:
+			_CicSeed = CIC6102_SEED;
+			memcpy(_CicChecksum, CIC6102_CHECKSUM, 12);
+			break;
+		case CIC_SEED_6103:
+			_CicSeed = CIC6103_SEED;
+			memcpy(_CicChecksum, CIC6103_CHECKSUM, 12);
+			break;
+		case CIC_SEED_6105:
+			_CicSeed = CIC6105_SEED;
+			memcpy(_CicChecksum, CIC6105_CHECKSUM, 12);
+			break;
+		case CIC_SEED_6106:
+			_CicSeed = CIC6106_SEED;
+			memcpy(_CicChecksum, CIC6106_CHECKSUM, 12);
+			break;
+		case CIC_SEED_7102:
+			_CicSeed = CIC7102_SEED;
+			memcpy(_CicChecksum, CIC6102_CHECKSUM, 12);
+			break;
+		default:
+			// Default use 6102
+			_CicSeed = CIC6102_SEED;
+			memcpy(_CicChecksum, CIC6102_CHECKSUM, 12);
+			break;
+	}
+}
+
+volatile bool cic_needs_reset = false;
+void n64_cic_reset() {
+	cic_needs_reset = true;
+}
+
 void n64_cic_run(uint8_t _pin_cr, uint8_t _pin_dclk, uint8_t _pin_dio)
 {
 	unsigned char isPal;
@@ -533,6 +570,11 @@ void n64_cic_run(uint8_t _pin_cr, uint8_t _pin_dclk, uint8_t _pin_dio)
 	_CicMem[0x11] = ReadNibble();
 
 	while (check_running()) {
+		if (cic_needs_reset) {
+			cic_needs_reset = false;
+			break;
+		}
+
 		YIELD();
 		// read mode (2 bit)
 		unsigned char cmd = 0;
