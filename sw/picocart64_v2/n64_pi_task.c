@@ -212,8 +212,14 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
-			next_word = 0x4040; // boots @ 266
-			// next_word = 0x2040; 
+			// next_word = 0x4040; // boots @ 266
+			// next_word = 0x2040; // @266 is booting the menu rom
+			// next_word = 0x1940; // @266 is booting the menu rom
+			// next_word = 0x1840; // @266 is booting the menu rom
+			next_word = 0x1740; // @266 is booting the menu rom
+			// next_word = 0x1640; // NO work @266
+			// next_word = 0x1440; // doesn't work @266
+			// next_word = 0x1240; // doesn't work @266
 		
 			addr = n64_pi_get_value(pio);
 

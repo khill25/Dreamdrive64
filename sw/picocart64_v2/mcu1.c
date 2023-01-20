@@ -430,8 +430,11 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	const int freq_khz = 266000;
+	// const int freq_khz = 296000;
 	// const int freq_khz = 300000;
+	// const int freq_khz = 360000;
 
+	// vreg_set_voltage(VREG_VOLTAGE_1_20);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	gpio_configure(mcu1_gpio_config, ARRAY_SIZE(mcu1_gpio_config));
@@ -444,10 +447,19 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 
 	// IF READING FROM FROM FLASH... (works for compressed roms)
 	// Enabled to boot menu rom
-	qspi_oeover_normal(true);
-	ssi_hw->ssienr = 0;
-	ssi_hw->baudr = 8; // change baud
-	ssi_hw->ssienr = 1;
+	// qspi_oeover_normal(true);
+	// ssi_hw->ssienr = 0;
+	// ssi_hw->baudr = 2; // change baud
+	// ssi_hw->ssienr = 1;
+
+	// set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
+	// uint currentChipIndex = 0;
+	// current_mcu_enable_demux(true);
+	// psram_set_cs(currentChipIndex);
+	// program_connect_internal_flash();
+	// program_flash_exit_xip();	
+	// program_flash_flush_cache();
+	// program_flash_enter_cmd_xip(false);
 
 	// Set up ROM mapping table
 	if (memcmp(picocart_header, "picocartcompress", 16) == 0) {

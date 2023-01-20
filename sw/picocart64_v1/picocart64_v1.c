@@ -79,6 +79,7 @@ void cic_task_entry(__unused void *params)
 	// TODO: How do we detect if it's uninitialized (config area in flash?),
 	//       or maybe we don't have to care?
 	sram_load_from_flash();
+	n64_cic_set_seed(CIC_SEED_6102);
 
 	while (1) {
 		n64_cic_run(N64_COLD_RESET, N64_CIC_DCLK, N64_CIC_DIO);
@@ -145,8 +146,8 @@ int main(void)
 	// 266 MHz is safe in this regard.
 
 	// set_sys_clock_khz(133000, true);
-	set_sys_clock_khz(200000, true);
-	// set_sys_clock_khz(266000, true);	// Required for SRAM @ 200ns
+	// set_sys_clock_khz(200000, true);
+	set_sys_clock_khz(266000, true);	// Required for SRAM @ 200ns
 
 	// Init GPIOs before starting the second core and FreeRTOS
 	for (int i = 0; i <= 27; i++) {
@@ -169,7 +170,7 @@ int main(void)
 	gpio_pull_up(N64_CIC_DIO);
 
 	// Init UART on pin 28/29
-	//stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
+	stdio_async_uart_init_full(UART_ID, BAUD_RATE, UART_TX_PIN, UART_RX_PIN);
 	printf("PicoCart64 Boot (git rev %08x)\r\n", GIT_REV);
 
 #if ENABLE_N64_PI

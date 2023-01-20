@@ -69,15 +69,21 @@ int main(void)
 	// Copy the boot loader
 	picocart_boot2_copy();
 
-	// // Turn off SSI
-	ssi_hw->ssienr = 0;
+	// // // Turn off SSI
+	// ssi_hw->ssienr = 0;
 
-	// // Disable output enable (OE) on all QSPI IO pins
-	qspi_oeover_disable();
+	// // // Disable output enable (OE) on all QSPI IO pins
+	// qspi_oeover_disable();
 
 	if (mcu_id == MCU1_ID) {
 		mcu1_main();
 	} else if (mcu_id == MCU2_ID) {
+		// // Turn off SSI
+		ssi_hw->ssienr = 0;
+
+		// // Disable output enable (OE) on all QSPI IO pins
+		qspi_oeover_disable();
+		
 		// It's up to MCU2 to let MCU1 boot
 		mcu2_main();
 	}

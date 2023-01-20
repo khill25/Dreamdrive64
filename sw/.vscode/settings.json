@@ -24,7 +24,9 @@
         "cstdlib": "c",
         "pio_uart.pio.h": "c",
         "joybus.pio.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "vreg.h": "c",
+        "stdio_async_uart.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

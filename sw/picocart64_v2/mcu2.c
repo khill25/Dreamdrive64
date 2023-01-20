@@ -12,6 +12,7 @@
 #include "hardware/structs/ioqspi.h"
 #include "hardware/clocks.h"
 #include "hardware/structs/systick.h"
+#include "hardware/vreg.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -228,6 +229,7 @@ void main_task_entry(__unused void *params)
 void mcu2_core1_entry(void)
 {
 	printf("[Core1] CIC Starting\n");
+	n64_cic_set_seed(CIC_SEED_6102);
 
 	while (1) {
 		n64_cic_run(PIN_N64_COLD_RESET, PIN_CIC_DCLK, PIN_CIC_DIO);
@@ -262,11 +264,14 @@ void mcu2_main(void)
 	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	const int freq_khz = 266000;
+	// const int freq_khz = 296000;
 	// const int freq_khz = 300000;
 	// const int freq_khz = 332000;
+	// const int freq_khz = 360000;
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
+	// vreg_set_voltage(VREG_VOLTAGE_1_20);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	// Init async UART on pin 0/1
