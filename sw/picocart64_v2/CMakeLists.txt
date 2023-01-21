@@ -25,6 +25,15 @@ add_executable(picocart64_v2
     pio_uart/pio_uart.c
 
     joybus/joybus.c
+
+    ## Libretro
+    libretro/bintree.c
+    libretro/dd64_libretro_filestream.c
+    libretro/libretrodb_tool.c
+    libretro/libretrodb.c
+    libretro/query.c
+    libretro/rmsgpack_dom.c
+    libretro/rmsgpack.c
 )
 
 if(NOT DEFINED REGION)
@@ -94,6 +103,7 @@ target_include_directories(picocart64_v2 PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/ws2812
     ${CMAKE_CURRENT_LIST_DIR}/flash_array
     ${CMAKE_CURRENT_LIST_DIR}/joybus
+    ${CMAKE_CURRENT_LIST_DIR}/libretro
 
     ${CMAKE_CURRENT_LIST_DIR}/../generated
     ${CMAKE_CURRENT_BINARY_DIR}

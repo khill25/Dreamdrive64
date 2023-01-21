@@ -26,7 +26,8 @@
         "joybus.pio.h": "c",
         "errno.h": "c",
         "vreg.h": "c",
-        "stdio_async_uart.h": "c"
+        "stdio_async_uart.h": "c",
+        "file_stream.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 
