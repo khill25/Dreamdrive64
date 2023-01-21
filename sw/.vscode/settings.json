@@ -27,7 +27,12 @@
         "errno.h": "c",
         "vreg.h": "c",
         "stdio_async_uart.h": "c",
-        "file_stream.h": "c"
+        "file_stream.h": "c",
+        "random": "c",
+        "ssi.h": "c",
+        "retro_endianness.h": "c",
+        "ff.h": "c",
+        "rmsgpack.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

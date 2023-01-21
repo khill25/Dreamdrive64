@@ -341,55 +341,55 @@ void rmsgpack_dom_value_print(struct rmsgpack_dom_value *obj)
          printf("]");
    }
 }
-int rmsgpack_dom_write(RFILE *fd, const struct rmsgpack_dom_value *obj)
-{
-   unsigned i;
-   int rv = 0;
-   int written = 0;
+// int rmsgpack_dom_write(RFILE *fd, const struct rmsgpack_dom_value *obj)
+// {
+//    unsigned i;
+//    int rv = 0;
+//    int written = 0;
 
-   switch (obj->type)
-   {
-      case RDT_NULL:
-         return rmsgpack_write_nil(fd);
-      case RDT_BOOL:
-         return rmsgpack_write_bool(fd, obj->val.bool_);
-      case RDT_INT:
-         return rmsgpack_write_int(fd, obj->val.int_);
-      case RDT_UINT:
-         return rmsgpack_write_uint(fd, obj->val.uint_);
-      case RDT_STRING:
-         return rmsgpack_write_string(fd, obj->val.string.buff, obj->val.string.len);
-      case RDT_BINARY:
-         return rmsgpack_write_bin(fd, obj->val.binary.buff, obj->val.binary.len);
-      case RDT_MAP:
-         if ((rv = rmsgpack_write_map_header(fd, obj->val.map.len)) < 0)
-            return rv;
-         written += rv;
+//    switch (obj->type)
+//    {
+//       case RDT_NULL:
+//          return rmsgpack_write_nil(fd);
+//       case RDT_BOOL:
+//          return rmsgpack_write_bool(fd, obj->val.bool_);
+//       case RDT_INT:
+//          return rmsgpack_write_int(fd, obj->val.int_);
+//       case RDT_UINT:
+//          return rmsgpack_write_uint(fd, obj->val.uint_);
+//       case RDT_STRING:
+//          return rmsgpack_write_string(fd, obj->val.string.buff, obj->val.string.len);
+//       case RDT_BINARY:
+//          return rmsgpack_write_bin(fd, obj->val.binary.buff, obj->val.binary.len);
+//       case RDT_MAP:
+//          if ((rv = rmsgpack_write_map_header(fd, obj->val.map.len)) < 0)
+//             return rv;
+//          written += rv;
 
-         for (i = 0; i < obj->val.map.len; i++)
-         {
-            if ((rv = rmsgpack_dom_write(fd, &obj->val.map.items[i].key)) < 0)
-               return rv;
-            written += rv;
-            if ((rv = rmsgpack_dom_write(fd, &obj->val.map.items[i].value)) < 0)
-               return rv;
-            written += rv;
-         }
-         break;
-      case RDT_ARRAY:
-         if ((rv = rmsgpack_write_array_header(fd, obj->val.array.len)) < 0)
-            return rv;
-         written += rv;
+//          for (i = 0; i < obj->val.map.len; i++)
+//          {
+//             if ((rv = rmsgpack_dom_write(fd, &obj->val.map.items[i].key)) < 0)
+//                return rv;
+//             written += rv;
+//             if ((rv = rmsgpack_dom_write(fd, &obj->val.map.items[i].value)) < 0)
+//                return rv;
+//             written += rv;
+//          }
+//          break;
+//       case RDT_ARRAY:
+//          if ((rv = rmsgpack_write_array_header(fd, obj->val.array.len)) < 0)
+//             return rv;
+//          written += rv;
 
-         for (i = 0; i < obj->val.array.len; i++)
-         {
-            if ((rv = rmsgpack_dom_write(fd, &obj->val.array.items[i])) < 0)
-               return rv;
-            written += rv;
-         }
-   }
-   return written;
-}
+//          for (i = 0; i < obj->val.array.len; i++)
+//          {
+//             if ((rv = rmsgpack_dom_write(fd, &obj->val.array.items[i])) < 0)
+//                return rv;
+//             written += rv;
+//          }
+//    }
+//    return written;
+// }
 
 static struct rmsgpack_read_callbacks dom_reader_callbacks = {
 	dom_read_nil,

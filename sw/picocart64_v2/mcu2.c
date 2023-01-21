@@ -36,8 +36,6 @@
 #include "ff.h"
 #include <string.h>
 
-#include "libretro/libretro.h"
-
 #define UART0_BAUD_RATE  (115200)
 
 // Priority 0 = lowest, 31 = highest
@@ -176,9 +174,8 @@ void main_task_entry(__unused void *params)
 
 	// vTaskDelay(5000);
 
-	char **argv;
-	volatile int x = libretro_tool_main(1, argv);
-	
+	volatile int x = get_rom_metadata();
+
 	//pc64_load_new_rom_command("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("GoldenEye 007 (U) [!].z64");

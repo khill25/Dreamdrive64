@@ -36,6 +36,9 @@
 // #include <libretro.h>
 #include "retro_common_api.h"
 #include "retro_inline.h"
+#include "ff.h" /* Obtains integer types */
+#include "diskio.h" /* Declarations of disk functions */
+#include "f_util.h"
 
 
 #define FILESTREAM_REQUIRED_VFS_VERSION 2
@@ -68,7 +71,7 @@
 
 RETRO_BEGIN_DECLS
 
-typedef struct RFILE RFILE;
+typedef FIL RFILE;
 
 int64_t filestream_get_size(RFILE *stream);
 

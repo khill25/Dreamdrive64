@@ -69,4 +69,6 @@ void load_new_rom(char* filename);
 void save_eeprom_to_sd();
 void load_eeprom_from_sd();
 
+int get_rom_metadata();
+
 void testFunction();

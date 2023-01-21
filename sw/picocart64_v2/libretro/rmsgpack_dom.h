@@ -91,7 +91,7 @@ struct rmsgpack_dom_value *rmsgpack_dom_value_map_value(
 
 int rmsgpack_dom_read(RFILE *fd, struct rmsgpack_dom_value *out);
 
-int rmsgpack_dom_write(RFILE *fd, const struct rmsgpack_dom_value *obj);
+// int rmsgpack_dom_write(RFILE *fd, const struct rmsgpack_dom_value *obj);
 
 int rmsgpack_dom_read_into(RFILE *fd, ...);
 

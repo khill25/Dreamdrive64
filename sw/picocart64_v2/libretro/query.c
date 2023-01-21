@@ -43,6 +43,26 @@
 int rl_fnmatch(const char *pattern, const char *string, int flags);
 char *strldup(const char *s, size_t n);
 
+const uint8_t lr_char_props[256] = {
+	/*x0   x1   x2   x3   x4   x5   x6   x7   x8   x9   xA   xB   xC   xD   xE   xF */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x80,0x80,0x00,0x00,0x80,0x00,0x00, /* 0x                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* 1x                  */
+	0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* 2x  !"#$%&'()*+,-./ */
+	0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x00,0x00,0x00,0x00,0x00,0x00, /* 3x 0123456789:;<=>? */
+	0x00,0x23,0x23,0x23,0x23,0x23,0x23,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22, /* 4x @ABCDEFGHIJKLMNO */
+	0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x22,0x00,0x00,0x00,0x00,0x08, /* 5x PQRSTUVWXYZ[\]^_ */
+	0x00,0x25,0x25,0x25,0x25,0x25,0x25,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24, /* 6x `abcdefghijklmno */
+	0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x24,0x00,0x00,0x00,0x00,0x00, /* 7x pqrstuvwxyz{|}~  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* 8x                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* 9x                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Ax                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Bx                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Cx                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Dx                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Ex                  */
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, /* Fx                  */
+};
+
 struct buffer
 {
    const char *data;
@@ -307,35 +327,35 @@ static void query_argument_free(struct argument *arg)
    free((void*)arg->a.invocation.argv);
 }
 
-static struct buffer query_parse_integer(
-      char *s, size_t len, 
-      struct buffer buff,
-      struct rmsgpack_dom_value *value,
-      const char **error)
-{
-   bool test   = false;
+// static struct buffer query_parse_integer(
+//       char *s, size_t len, 
+//       struct buffer buff,
+//       struct rmsgpack_dom_value *value,
+//       const char **error)
+// {
+//    bool test   = false;
 
-   value->type = RDT_INT;
+//    value->type = RDT_INT;
 
-   test        = (sscanf(buff.data + buff.offset,
-                         STRING_REP_INT64,
-                         (int64_t*)&value->val.int_) == 0);
+//    test        = (sscanf(buff.data + buff.offset,
+//                          STRING_REP_INT64,
+//                          (int64_t*)&value->val.int_) == 0);
 
-   if (test)
-   {
-      snprintf(s, len,
-            "%" PRIu64 "::Expected number",
-            (uint64_t)buff.offset);
-      *error = s;
-   }
-   else
-   {
-      while (ISDIGIT((int)buff.data[buff.offset]))
-         buff.offset++;
-   }
+//    if (test)
+//    {
+//       snprintf(s, len,
+//             "%" PRIu64 "::Expected number",
+//             (uint64_t)buff.offset);
+//       *error = s;
+//    }
+//    else
+//    {
+//       while (ISDIGIT((int)buff.data[buff.offset]))
+//          buff.offset++;
+//    }
 
-   return buff;
-}
+//    return buff;
+// }
 
 static struct buffer query_chomp(struct buffer buff)
 {
@@ -493,31 +513,33 @@ static struct buffer query_parse_value(
 {
    buff                 = query_chomp(buff);
 
-   if (query_peek(buff, "nil", STRLEN_CONST("nil")))
-   {
-      buff.offset      += STRLEN_CONST("nil");
-      value->type       = RDT_NULL;
-   }
-   else if (query_peek(buff, "true", STRLEN_CONST("true")))
-   {
-      buff.offset      += STRLEN_CONST("true");
-      value->type       = RDT_BOOL;
-      value->val.bool_  = 1;
-   }
-   else if (query_peek(buff, "false", STRLEN_CONST("false")))
-   {
-      buff.offset       += STRLEN_CONST("false");
-      value->type        = RDT_BOOL;
-      value->val.bool_   = 0;
-   }
-   else if (
+   // if (query_peek(buff, "nil", STRLEN_CONST("nil")))
+   // {
+   //    buff.offset      += STRLEN_CONST("nil");
+   //    value->type       = RDT_NULL;
+   // }
+   // else if (query_peek(buff, "true", STRLEN_CONST("true")))
+   // {
+   //    buff.offset      += STRLEN_CONST("true");
+   //    value->type       = RDT_BOOL;
+   //    value->val.bool_  = 1;
+   // }
+   // else if (query_peek(buff, "false", STRLEN_CONST("false")))
+   // {
+   //    buff.offset       += STRLEN_CONST("false");
+   //    value->type        = RDT_BOOL;
+   //    value->val.bool_   = 0;
+   // }
+   // else 
+   if (
          query_peek(buff, "b", STRLEN_CONST("b"))  || 
          query_peek(buff, "\"", STRLEN_CONST("\"")) ||
-         query_peek(buff, "'", STRLEN_CONST("'")))
+         query_peek(buff, "'", STRLEN_CONST("'"))) {
       buff = query_parse_string(s, len,
              buff, value, error);
-   else if (ISDIGIT((int)buff.data[buff.offset]))
-      buff = query_parse_integer(s, len, buff, value, error);
+   }
+   // else if (ISDIGIT((int)buff.data[buff.offset]))
+   //    buff = query_parse_integer(s, len, buff, value, error);
    return buff;
 }
 

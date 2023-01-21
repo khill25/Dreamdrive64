@@ -39,21 +39,21 @@ struct rmsgpack_read_callbacks
    int (*read_array_start)(uint32_t, void *);
 };
 
-int rmsgpack_write_array_header(RFILE *fd, uint32_t size);
+// int rmsgpack_write_array_header(RFILE *fd, uint32_t size);
 
-int rmsgpack_write_map_header(RFILE *fd, uint32_t size);
+// int rmsgpack_write_map_header(RFILE *fd, uint32_t size);
 
-int rmsgpack_write_string(RFILE *fd, const char *s, uint32_t len);
+// int rmsgpack_write_string(RFILE *fd, const char *s, uint32_t len);
 
-int rmsgpack_write_bin(RFILE *fd, const void *s, uint32_t len);
+// int rmsgpack_write_bin(RFILE *fd, const void *s, uint32_t len);
 
-int rmsgpack_write_nil(RFILE *fd);
+// int rmsgpack_write_nil(RFILE *fd);
 
-int rmsgpack_write_bool(RFILE *fd, int value);
+// int rmsgpack_write_bool(RFILE *fd, int value);
 
-int rmsgpack_write_int(RFILE *fd, int64_t value);
+// int rmsgpack_write_int(RFILE *fd, int64_t value);
 
-int rmsgpack_write_uint(RFILE *fd, uint64_t value );
+// int rmsgpack_write_uint(RFILE *fd, uint64_t value );
 
 int rmsgpack_read(RFILE *fd, struct rmsgpack_read_callbacks *callbacks, void *data);
 

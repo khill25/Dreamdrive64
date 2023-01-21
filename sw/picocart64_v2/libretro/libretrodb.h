@@ -51,8 +51,8 @@ void libretrodb_close(libretrodb_t *db);
 
 int libretrodb_open(const char *path, libretrodb_t *db);
 
-int libretrodb_create_index(libretrodb_t *db, const char *name,
-      const char *field_name);
+// int libretrodb_create_index(libretrodb_t *db, const char *name,
+//       const char *field_name);
 
 int libretrodb_find_entry(libretrodb_t *db, const char *index_name,
         const void *key, struct rmsgpack_dom_value *out);

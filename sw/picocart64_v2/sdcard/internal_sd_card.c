@@ -34,6 +34,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+#include "libretro/libretro.h"
+
 #define SD_CARD_RX_READ_DEBUG 0
 
 #define REGISTER_SD_COMMAND 0x0 // 1 byte, r/w
@@ -695,6 +697,33 @@ void mount_sd(void) {
         printf("Error getting sd card by name: %s\n", arg1);
     }
     pSD->mounted = true;
+}
+
+int get_rom_metadata() {
+
+    sd_card_t *pSD = sd_get_by_num(0);
+	FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+	if (FR_OK != fr) {
+		panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
+	}
+
+    // FIL fp;
+    // char* path = "/dd64_firmware/N64.rdb";
+    // fr = f_open(&fp, path, FA_OPEN_EXISTING | FA_READ);
+
+    // if (FR_OK != fr && FR_EXIST != fr) {
+	// 	panic("f_open(%s) error: %s (%d)\n", path, FRESULT_str(fr), fr);
+	// }
+
+    // printf("Opened (%s)!\n", path);
+    // return 0;
+
+    char **argv;
+    uint32_t startTime = time_us_32();
+	volatile int x = libretro_tool_main(1, argv);
+    uint32_t totalTime = time_us_32() - startTime;
+    printf("Took %ums to access rom metadata\n", totalTime / 1000);
+    return x;
 }
 
 void testFunction() {
