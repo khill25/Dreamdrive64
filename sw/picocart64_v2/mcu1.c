@@ -424,19 +424,22 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
-	// const int freq_khz = 210000;
-	// const int freq_khz = 220000;
-	// const int freq_khz = 230000;
-	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	const int freq_khz = 266000;
+	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
 
+	// IMPORTANT: For the serial comms between mcus to work properly 
+	// both mcus must be run at the same clk speed or have the pio divder set accordingly
+
+	// Note that this might call set_sys_clock_pll,
+	// which might set clk_peri to 48 MHz
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	gpio_configure(mcu1_gpio_config, ARRAY_SIZE(mcu1_gpio_config));
 
-	// Enable STDIO
+	// Enable STDIO, typically disabled on mcu1 as the uart pin is being used
+	// for serial comms to mcu2.
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
@@ -461,10 +464,6 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 		}
 	}
 
-#if 0
-	printf("Start board test\n");
-	boardTest();
-#else
 	multicore_launch_core1(mcu1_core1_entry);
 
 	printf("launching n64_pi_run...\n");
@@ -476,6 +475,4 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 			n64_pi_run();
 		}
 	}
-#endif
-
 }

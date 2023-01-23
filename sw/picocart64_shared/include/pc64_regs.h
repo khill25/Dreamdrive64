@@ -1,17 +1,17 @@
 /**
  * SPDX-License-Identifier: BSD-2-Clause
- *
+ * 
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2022 Kaili Hill
  */
 
 #pragma once
 
-// PicoCart64 Address space
+// DreamDrive64 Address space
 
 // [READ/WRITE]: Scratch memory used for various functions
-// #define PC64_BASE_ADDRESS_START     0x81000000
-#define PC64_BASE_ADDRESS_START     (0x1FFE0000) //0x20000000 - 
-#define PC64_BASE_ADDRESS_LENGTH    (0x0000800)//(0x00001000)
+#define PC64_BASE_ADDRESS_START     (0x1FFE0000)
+#define PC64_BASE_ADDRESS_LENGTH    (0x0001000)
 #define PC64_BASE_ADDRESS_END       (PC64_BASE_ADDRESS_START + PC64_BASE_ADDRESS_LENGTH - 1)
 
 // [READ]: Returns pseudo-random values.
@@ -24,18 +24,18 @@
 
 // [READ/WRITE]: Command address space. See register definitions below for details.
 #define PC64_CIBASE_ADDRESS_START   (PC64_BASE_ADDRESS_END + 1)
-#define PC64_CIBASE_ADDRESS_LENGTH  0x00000800
+#define PC64_CIBASE_ADDRESS_LENGTH  (0x00000800)
 #define PC64_CIBASE_ADDRESS_END     (PC64_CIBASE_ADDRESS_START + PC64_CIBASE_ADDRESS_LENGTH - 1)
 
 // [Read]: Returns PC64_MAGIC
-#define PC64_REGISTER_MAGIC         0x00000000
-#define PC64_MAGIC                  0xDEAD6400
+#define PC64_REGISTER_MAGIC         (0x00000000)
+#define PC64_MAGIC                  (0xDEAD6400)
 
 // [WRITE]: Write number of bytes to print from TX buffer
-#define PC64_REGISTER_UART_TX       0x00000004
+#define PC64_REGISTER_UART_TX       (0x00000004)
 
 // [WRITE]: Set the random seed to a 32-bit value
-#define PC64_REGISTER_RAND_SEED     0x00000008
+#define PC64_REGISTER_RAND_SEED     (0x00000008)
 
 /* *** SD CARD *** */
 // [READ]: Signals pico to start data read from SD Card
