@@ -10,7 +10,6 @@ LD = $(GCCN64PREFIX)ld
 OBJCOPY = $(GCCN64PREFIX)objcopy
 N64TOOL = $(ROOTDIR)/bin/n64tool
 CHKSUM64 = $(ROOTDIR)/bin/chksum64
-MKDFS = $(ROOTDIR)/bin/mkdfs
 ECHO = echo
 
 # To enable verbose prints, set VERBOSE=1 when building:
@@ -44,9 +43,9 @@ $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
 	$(V)$(ECHO) "[  CC ]" $(notdir $<)
 	$(V)$(CC) -o $@ $< -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) 
 
-$(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin $(BUILD_DIR)/$(PROG_NAME).dfs
+$(BUILD_DIR)/$(PROG_NAME).z64: $(BUILD_DIR)/$(PROG_NAME).bin
 	$(V)$(ECHO) "[ Z64 ]" $(notdir $@)
-	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M $(BUILD_DIR)/$(PROG_NAME).dfs
+	$(N64TOOL) $(N64TOOLFLAGS) -o $@ $(BUILD_DIR)/$(PROG_NAME).bin -s 1M
 	$(V)$(ECHO) "[ CHK ]" $(notdir $@)
 	$(V)$(CHKSUM64) $@
 
