@@ -23,11 +23,6 @@ extern volatile bool romLoading;
 extern volatile bool start_saveEeepromData;
 extern volatile bool start_loadEeepromData;
 
-// debug vars
-extern int totalSectorsRead;
-extern int numberOfSendDataCalls;
-extern uint32_t totalTimeOfSendData_ms;
-
 // UART TX buffer
 extern volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
 
@@ -68,5 +63,3 @@ void load_new_rom(char* filename);
 
 void save_eeprom_to_sd();
 void load_eeprom_from_sd();
-
-void testFunction();

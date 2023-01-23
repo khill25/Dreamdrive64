@@ -605,7 +605,6 @@ void load_eeprom_from_sd() {
 BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE];
 // MCU2 will send data once it has the information it needs
 void send_data(uint32_t sectorCount) {
-    numberOfSendDataCalls++;
     uint64_t sectorFront = sectorToSendRegisters[0];
     uint64_t sector = (sectorFront << 32) | sectorToSendRegisters[1];
     #if DEBUG_MCU2_PRINT == 1
