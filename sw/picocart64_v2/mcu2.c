@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2022 Kaili Hill
  */
 
 #include <stdio.h>
@@ -109,52 +110,9 @@ void main_task_entry(__unused void *params)
 	int count = 0;
 	printf("MCU2 Main Entry\n");
 
-	// current_mcu_enable_demux(true);
-	// psram_set_cs(2);
-
-	// program_connect_internal_flash();
-	// program_flash_exit_xip();
-	// program_flash_flush_cache();
-	// picocart_boot2_enable();
-
-	// volatile uint16_t *ptr16 = (volatile uint16_t *)0x10000000;
-	// printf("Access using 16bit pointer at [0x10000000]\n");
-	// uint32_t startTime = time_us_32();
-	// uint32_t totalTime = 0;
-	// for(int i = 0; i < 4096; i+=2) {
-	// 	// uint32_t now = time_us_32();	
-	// 	volatile uint16_t word = ptr16[i >> 1];
-
-	// 	// totalTime += time_us_32() - now;
-	// 	// if (i < 64) {
-	// 	// 	if (i % 8 == 0) {
-	// 	// 		printf("\n%08x: ", i);
-				
-	// 	// 	}
-	// 	// 	printf("%04x ", word);
-	// 	// }
-	// }
-	// totalTime = time_us_32() - startTime;
-	// float elapsed_time_s = 1e-6f * totalTime;
-	// printf("\nxip access via boot2 for 4kB using 16bit pointer took %d us. %.3f MB/s\n", totalTime, ((4096 / 1e6f) / elapsed_time_s));
-
-	// // boot mcu1 before loading rom so it can actually read out of flash to boot
-	// if (NEED_LOAD_ROM == 0) {
-	// 	printf("Loading rom...\n");
-	// 	load_rom("Doom 64 (USA) (Rev 1).z64");
-	// 	// load_rom("testrom.z64"); 
-	// 	printf("\nfinished loading rom.\n");
-	// } else {
-	// 	printf("Skipping rom load this time. Rom should already be in flash.\n");
-	// }
-	// set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
-	// current_mcu_enable_demux(true);
-	// psram_set_cs(1);
-	
-	// current_mcu_enable_demux(false);
+	// Make sure that ssi hardware is disabled before starting mcu1
     ssi_hw->ssienr = 0;
 	qspi_oeover_disable();
-    // qspi_disable();
 
 	vTaskDelay(100);
 	printf("Booting MCU1...\n");
@@ -164,15 +122,13 @@ void main_task_entry(__unused void *params)
 	mount_sd();
 	printf("Finished!\n");
 
-	// testFunction();
-
 	// Setup PIO UART
 	printf("Initing MCU1<->MCU2 serial bridge...");
 	pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
 	printf("Finshed!\n");
 
+	// Random test stuff, leave in for now as still heavily debugging
 	// vTaskDelay(5000);
-	
 	//pc64_load_new_rom_command("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
@@ -245,6 +201,7 @@ void vLaunch(void)
 {
 	xTaskCreateStatic(main_task_entry, "Main", MAIN_TASK_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, main_task_stack, &main_task);
 	xTaskCreateStatic(led_task_entry, "LED", LED_TASK_STACK_SIZE, NULL, LED_TASK_PRIORITY, led_task_stack, &led_task);
+	// Disable the esp32 right now to avoid adding any additional variables to debug
 	//xTaskCreateStatic(esp32_task_entry, "ESP32", ESP32_TASK_STACK_SIZE, NULL, ESP32_TASK_PRIORITY, esp32_task_stack, &esp32_task);
 
 	// Start the tasks and timer.
@@ -256,14 +213,13 @@ void mcu2_main(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
-	// const int freq_khz = 210000;
-	// const int freq_khz = 220000;
-	// const int freq_khz = 230000;
-	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	const int freq_khz = 266000;
+	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
-	// const int freq_khz = 332000;
+
+	// IMPORTANT: For the serial comms between mcus to work properly 
+	// both mcus must be run at the same clk speed or have the pio divder set accordingly
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
@@ -276,7 +232,7 @@ void mcu2_main(void)
 
 	set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
 
-	// printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
+	printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 
 	// Enable a 12MHz clock output on GPIO21 / clk_gpout0
 	clock_gpio_init(PIN_MCU2_GPIO21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_XOSC_CLKSRC, 1);

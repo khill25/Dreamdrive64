@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2022 Kaili Hill
  */
 
 #include <stdio.h>
@@ -33,7 +34,6 @@
 
 #include "rom_vars.h"
 
-// #include "eeprom.h"
 #include "joybus/joybus.h"
 
 static const gpio_config_t mcu1_gpio_config[] = {
@@ -70,19 +70,17 @@ static const gpio_config_t mcu1_gpio_config[] = {
 	{PIN_DEMUX_A2, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
 	{PIN_DEMUX_IE, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
 
-	// SPI on PIO1
-    // PIN_MCU2_SCK        (27) // MCU2 GPIO pin 26: PIN_SPI1_SCK
-    // PIN_MCU2_CS         (28) // MCU2 GPIO pin 29: PIN_SPI1_CS
-    // PIN_MCU2_DIO        (29) // MCU2 GPIO pin 28: PIN_SPI1_RX
-	// {PIN_MCU2_SCK, GPIO_IN, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_SIO},
-	// {PIN_MCU2_SCK, GPIO_OUT, true, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1}, // used when spi master
+	// Initial config for serial comm pin, doesn't really matter since stdio init or pio_uart init will
+	// init the pin for the correct config.
 	{PIN_MCU2_CS, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
-	// {PIN_MCU2_CS, GPIO_OUT, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_UART},	// UART for now
 	{PIN_MCU2_DIO, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 };
 
 volatile bool g_restart_pi_handler = false;
 
+// Basic ring buffer. Useful for debug info
+// Data can be sent to mcu2 instead of stdio by using
+// `uart_tx_program_putc` method.
 uint32_t log_buffer[LOG_BUFFER_SIZE]; // store addresses
 volatile int log_head = 0;
 volatile int log_tail = 0;
@@ -99,33 +97,15 @@ void add_log_to_buffer(uint32_t value) {
 static uint32_t last_log_value = 0;
 void process_log_buffer() {
 	if (log_tail == log_head) {
-		// noting to pring
+		// noting to print
 		return;
 	}
 
 	uint32_t value = log_buffer[log_tail++];
 
-	// if (lastLoggedValue+2 == value) {
-	// 	compactedSequensialValues++;
-	// } else if (value > lastLoggedValue) {
-	// 	printf("!%08x ", lastLoggedValue);
-	// 	if (compactedSequensialValues > 0) {
-	// 		printf("!%d ||", compactedSequensialValues);
-	// 	}
-	// 	compactedSequensialValues = 0;
-	// }
-	// lastLoggedValue = value;
-
-	// if (log_tail % 64 == 0) {
-	// 	printf("\n");
-	// }
-
 	printf("0x%08x ", value);
-	// printf("%d ", value - last_log_value);
-	// last_log_value = value;
 	if (log_tail >= LOG_BUFFER_SIZE) {
 		log_tail = 0;
-		// printf("\n");
 	}
 }
 
@@ -134,14 +114,16 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms
 
 	bool readingData = false;
+	bool startJoybus = false;
 	volatile bool isWaitingForRomLoad = false;
+
+	// Some debug and test variables
+	volatile bool hasInit = false;
+	volatile bool test_load = false;
 	volatile uint32_t t = 0;
 	volatile uint32_t it = 0;
 	volatile uint32_t t2 = 0;
 	
-	bool startJoybus = false;
-	volatile bool hasInit = false;
-	volatile bool test_load = false;
 	while (1) {
 		tight_loop_contents();
 
@@ -156,9 +138,11 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			enable_joybus();
 		}
 
+		// This would typically be used with test load code after a rom has been loaded
+		// recompile with test_load off and rom should be ready to boot after a few seconds
+		// then power on the n64. Not for the faint of heart.
 		// if (t2 == 2 && !hasInit) {
 		// 	hasInit = true;
-			
 		// 	set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
 		// 	uint currentChipIndex = START_ROM_LOAD_CHIP_INDEX;
 		// 	current_mcu_enable_demux(true);
@@ -194,6 +178,9 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 		// }
 
 		// Do a rom load test after x seconds
+		// This is useful for loading a rom into psram while the device is
+		// connected to usb power for quicker rom loads and code testing.
+		// Bit of a hack to get working and probably not for the faint of heart.
 		if(test_load && t2 > 1) {
 			test_load = false;
 			printf("Disabling mcu1 qspi\n");
@@ -424,19 +411,22 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
-	// const int freq_khz = 210000;
-	// const int freq_khz = 220000;
-	// const int freq_khz = 230000;
-	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	const int freq_khz = 266000;
+	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
 
+	// IMPORTANT: For the serial comms between mcus to work properly 
+	// both mcus must be run at the same clk speed or have the pio divder set accordingly
+
+	// Note that this might call set_sys_clock_pll,
+	// which might set clk_peri to 48 MHz
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	gpio_configure(mcu1_gpio_config, ARRAY_SIZE(mcu1_gpio_config));
 
-	// Enable STDIO
+	// Enable STDIO, typically disabled on mcu1 as the uart pin is being used
+	// for serial comms to mcu2.
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
@@ -461,10 +451,6 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 		}
 	}
 
-#if 0
-	printf("Start board test\n");
-	boardTest();
-#else
 	multicore_launch_core1(mcu1_core1_entry);
 
 	printf("launching n64_pi_run...\n");
@@ -476,6 +462,4 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 			n64_pi_run();
 		}
 	}
-#endif
-
 }

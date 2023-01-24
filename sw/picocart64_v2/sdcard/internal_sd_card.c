@@ -49,6 +49,7 @@
 #define COMMAND_SET_EEPROM_TYPE  (0xE7)
 #define DISK_READ_BUFFER_SIZE 512
 
+#define DEBUG_MCU2_PRINT 1
 #define PRINT_BUFFER_AFTER_SEND 0
 #define MCU1_ECHO_RECEIVED_DATA 0
 #define MCU2_PRINT_UART 1
@@ -79,7 +80,6 @@ volatile uint16_t eeprom_numBytesToBackup = 0;
 volatile bool start_saveEeepromData = false;
 volatile bool start_loadEeepromData = false;
 
-
 void pc64_set_sd_read_sector_part(int index, uint32_t value) {
     #if SD_CARD_RX_READ_DEBUG == 1
         printf("set read sector part %d = %d", index, value);
@@ -96,7 +96,6 @@ void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len) {
     strcpy(sd_selected_rom_title, titleBuffer);
 }
 
-int tempSector = 0;
 void pc64_send_sd_read_command(void) {
     // Block cart while waiting for data
     sd_is_busy = true;
@@ -137,7 +136,7 @@ void pc64_send_sd_read_command(void) {
 
 // Send command from MCU1 to MCU2 to start loading a rom
 void pc64_send_load_new_rom_command() {
-        // Block cart while waiting for data
+    // Block cart while waiting for data
     sd_is_busy = true;
     sendDataReady = false;
     romLoading = true;
@@ -187,7 +186,6 @@ void load_new_rom(char* filename) {
 	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
 
     // TODO read the file header and lookup the eeprom save size
-    // TODO send the eeprom save size to mcu1
 
     printf("Sending eeprom type to mcu1\n");
     uart_tx_program_putc(COMMAND_START);
@@ -202,8 +200,6 @@ void load_new_rom(char* filename) {
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
     load_eeprom_from_sd();
-
-    // TODO load eeprom data and send to mcu1
 
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
@@ -244,6 +240,10 @@ void load_new_rom(char* filename) {
 	}
 	printf("---- read file done -----\n\n\n");
 
+    // enter quad mode for all chips
+    // TODO use a loop and change all chips
+    // Waiting on new v2 hardware revision
+
     psram_set_cs(START_ROM_LOAD_CHIP_INDEX);
     program_flash_do_cmd(0x35, NULL, NULL, 0);
 
@@ -267,8 +267,9 @@ void load_new_rom(char* filename) {
     program_flash_flush_cache();
 
     // Now enable xip and try to read
+    uint32_t totalReadTime[8] = {0};
+    uint32_t testReadBuf[128] = {0}; // Enough room for 16 words * 8 chips
     for (int o = 0; o < 4; o++) {
-        
         psram_set_cs(START_ROM_LOAD_CHIP_INDEX+o); // Use the PSRAM chip
         program_flash_enter_cmd_xip(true);
 
@@ -278,28 +279,44 @@ void load_new_rom(char* filename) {
         uint32_t totalTime = 0;
         int psram_csToggleTime = 0;
         int total_memoryAccessTime = 0;
-        int totalReadTime = 0;
+        
+        uint32_t startTime_us = time_us_32();
         for (int i = 0; i < 128; i++) {
-            uint32_t modifiedAddress = i;
-            uint32_t startTime_us = time_us_32();
-            uint32_t word = ptr[modifiedAddress];
-            totalReadTime += time_us_32() - startTime_us;
-
-            if (i < 16) { // only print the first 16 words
-                printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
+            volatile uint32_t word = ptr[i];
+            if (i < 16) {
+                testReadBuf[o*16+i] = word; // o * numBytesToBuffer + i
             }
         }
-        printf("\n128 32bit reads @ 0x13000000 reads took %d us\n", totalReadTime);
+        totalReadTime[o] += time_us_32() - startTime_us;
 
-        exitQuadMode(); // exit quad mode once finished
+        // exit quad mode once finished with read
+        exitQuadMode(); 
         sleep_ms(100);
     }
 
     // Now turn off the hardware
     current_mcu_enable_demux(false);
     ssi_hw->ssienr = 0;
-
     qspi_disable();
+
+    #if DEBUG_MCU2_PRINT == 1
+    uint32_t startTime_us = time_us_32();
+    int o = 0;
+    for (int i = 0; i < 128; i++) {
+        volatile uint32_t word = testReadBuf[i];
+        if (i % 16 == 0) { 
+            printf("Chip %d\n", o + START_ROM_LOAD_CHIP_INDEX);
+        }
+        printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
+
+        if (i % 16 == 0) {
+            printf("\n128 32bit reads @ 0x13000000 reads took %u us\n", totalReadTime[o]);
+            o++;
+        }
+    }
+    
+    #endif
+
     printf("Rom Loaded, MCU2 qspi: OFF, sending mcu1 rom loaded command\n");
 
     // Let MCU1 know that we are finished
@@ -478,12 +495,16 @@ void mcu2_process_rx_buffer() {
             } else if (command == COMMAND_LOAD_ROM) {
                 sprintf(sd_selected_rom_title, "%s", buffer);
                 startRomLoad = true;
+                #if DEBUG_MCU2_PRINT == 1
                 printf("nbtr: %u\n", command_numBytesToRead);
+                #endif
 
             } else if (command == COMMAND_BACKUP_EEPROM) {
                 eeprom_numBytesToBackup = command_numBytesToRead;
                 start_saveEeepromData = true;
+                #if DEBUG_MCU2_PRINT == 1
                 printf("eeprom nbtr: %u\n", command_numBytesToRead);
+                #endif
 
             } else {
                 // not supported yet
@@ -583,21 +604,18 @@ void load_eeprom_from_sd() {
 
 BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE];
 // MCU2 will send data once it has the information it needs
-int totalSectorsRead = 0;
-int numberOfSendDataCalls = 0;
-uint32_t totalTimeOfSendData_ms = 0;
 void send_data(uint32_t sectorCount) {
-    numberOfSendDataCalls++;
     uint64_t sectorFront = sectorToSendRegisters[0];
     uint64_t sector = (sectorFront << 32) | sectorToSendRegisters[1];
+    #if DEBUG_MCU2_PRINT == 1
     printf("Count: %u, Sector: %llu\n", sectorCount, sector);
+    #endif
     int loopCount = 0;
     uint32_t startTime = time_us_32();
     do {
         loopCount++;
 
         DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
-        totalSectorsRead++;
         
         if (dr != RES_OK) {
             printf("Error reading disk: %d\n", dr);
@@ -617,20 +635,16 @@ void send_data(uint32_t sectorCount) {
 
     // Repeat if we are reading more than 1 sector
     } while(sectorCount > 1);
-    uint32_t totalTime = time_us_32() - startTime;
-    totalTimeOfSendData_ms += totalTime / 1000;
     
     #if PRINT_BUFFER_AFTER_SEND == 1
-    // if (sector == 31838 || sector == 41350 || sector == 41351) {
-        printf("buffer for sector: %ld\n", sector);
-        for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
-            if (diskBufferIndex % 16 == 0) {
-                printf("\n%08x: ", diskBufferIndex);
-            }
-            printf("%02x ", diskReadBuffer[diskBufferIndex]);
+    printf("buffer for sector: %ld\n", sector);
+    for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
+        if (diskBufferIndex % 16 == 0) {
+            printf("\n%08x: ", diskBufferIndex);
         }
-        printf("\n");
-    // }
+        printf("%02x ", diskReadBuffer[diskBufferIndex]);
+    }
+    printf("\n");
     #endif
 }
 
@@ -640,7 +654,7 @@ void send_sd_card_data() {
 
     // Send the data over uart back to MCU1 so the rom can read it
     // Sector is fetched from the sectorToSendRegisters
-    // uint32_t numSectors = 1;
+    // But it's hard coded to 1 in libdragon's pc64 patch
     send_data(1);
 }
 
@@ -663,17 +677,6 @@ void mount_sd(void) {
     printf("Mounting SD Card\n");
     // // See FatFs - Generic FAT Filesystem Module, "Application Interface",
 	// // http://elm-chan.org/fsw/ff/00index_e.html
-	// pSD = sd_get_by_num(0);
-	// FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
-	// if (FR_OK != fr) {
-	// 	panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
-	// }
-
-    // printf("SD Card mounted. Status: %d\n", fr);
-
-    // Original code from test project. Might not need this more complicated version
-    //const char *arg1 = strtok(NULL, " ");
-    //if (!arg1) arg1 = sd_get_by_num(0)->pcName;
     const char *arg1 = sd_get_by_num(0)->pcName;
     FATFS *p_fs = sd_get_fs_by_name(arg1);
     if (!p_fs) {
@@ -690,118 +693,4 @@ void mount_sd(void) {
         printf("Error getting sd card by name: %s\n", arg1);
     }
     pSD->mounted = true;
-}
-
-void testFunction() {
-    
-    char* filename = "GoldenEye 007 (U) [!].z64";
-    char buf[64];
-    sd_card_t *pSD = sd_get_by_num(0);
-	FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
-	if (FR_OK != fr) {
-		panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
-	}
-
-	FIL fil;
-
-	printf("\n\n---- read /%s -----\n", filename);
-
-	fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ);
-	if (FR_OK != fr && FR_EXIST != fr) {
-		panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
-	}
-
-	FILINFO filinfo;
-	fr = f_stat(filename, &filinfo);
-	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
-
-	int len = 0;
-	int total = 0;
-	uint64_t t0 = to_us_since_boot(get_absolute_time());
-    int currentPSRAMChip = 3;
-	do {
-        fr = f_read(&fil, buf, sizeof(buf), &len);
-        //program_write_buf(total, buf, len);
-		total += len;
-        printf("len: %d\n", len);
-
-	} while (total < 512);
-	uint64_t t1 = to_us_since_boot(get_absolute_time());
-	uint32_t delta = (t1 - t0) / 1000;
-	uint32_t kBps = (uint32_t) ((float)(total / 1024.0f) / (float)(delta / 1000.0f));
-
-	printf("Read %d bytes in %d ms (%d kB/s)\n\n\n", total, delta, kBps);
-
-	fr = f_close(&fil);
-	if (FR_OK != fr) {
-		printf("f_close error: %s (%d)\n", FRESULT_str(fr), fr);
-	}
-	printf("---- read file done -----\n\n\n");
-}
-
-// If we want to use any flash chips this will erase
-// Do this before writing any data to the flash chips
-// If any of the chips are flash, erase sectors in advance
-void prepare_memory_array_for_rom_data(uint startChipIndex, uint64_t filesize) {
-
-    // uint numPSRAMChips = 0;
-    // uint numFlashChips = 0;
-    // uint64_t fs = filesize;
-    // uint i = 0;
-    // do {
-    //     uint8_t isFlashChip = isChipIndexFlash(i + startChipIndex);
-    //     uint32_t chipSize;
-    //     if (isFlashChip) {
-    //         numFlashChips++;
-    //         chipSize = FLASH_CHIP_CAPACITY_BYTES;
-    //     } else {
-    //         numPSRAMChips++;
-    //         chipSize = PSRAM_CHIP_CAPACITY_BYTES;
-    //     }
-
-    //     // Avoid negative numbers, this means we reached the end
-    //     if (chipSize > fs) {
-    //         fs = 0;
-    //     } else {
-    //         fs -= chipSize;
-    //     }
-    //     i++;
-    // } while(fs > 0);
-    
-    uint endChipIndex = (filesize / 1024 / 1024);
-    uint index = 0;
-    uint64_t remainingFilesize = filesize;
-    do {
-        psram_set_cs(index + startChipIndex);
-
-        // If this is a flash chip we have to erase it (or a portion of it)
-        if (isChipIndexFlash(index + startChipIndex)) {
-            uint32_t address = 0;
-            uint32_t bytesRemaining;
-            if (FLASH_CHIP_CAPACITY_BYTES > remainingFilesize) {
-                bytesRemaining = remainingFilesize;
-            } else {
-                bytesRemaining = FLASH_CHIP_CAPACITY_BYTES;
-            }
-
-            printf("Erasing %uMB of flash chip U%u\n", bytesRemaining / 1024 / 1024, index + startChipIndex);
-            uint32_t start = time_us_32();
-            do {
-                program_flash_range_erase(address, FLASH_BLOCK_SIZE, FLASH_BLOCK_SIZE, 0xd8);
-                address += FLASH_BLOCK_SIZE;
-            } while (address < bytesRemaining);
-            uint32_t timeTook = time_us_32() - start;
-            uint32_t KB_per_sec = (bytesRemaining / 1024) / (timeTook / 1000000);
-            printf("Erased %uMB in %usec [%ukB/s]\n", bytesRemaining / 1024 / 1024, timeTook / 1000000, KB_per_sec);
-            remainingFilesize -= bytesRemaining;
-
-        } else {
-            printf("PSRAM chip at U%u, no need to erase\n", index + startChipIndex);
-            remainingFilesize -= PSRAM_CHIP_CAPACITY_BYTES;
-        }
-
-        index++;
-    } while(remainingFilesize > 0);
-
-    psram_set_cs(startChipIndex);
 }

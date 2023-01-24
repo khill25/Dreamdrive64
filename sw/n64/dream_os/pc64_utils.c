@@ -1,7 +1,6 @@
 /**
  * SPDX-License-Identifier: BSD-2-Clause
- * 
- * Copyright (c) 2022 Konrad Beckmann <konrad.beckmann@gmail.com>
+ *
  * Copyright (c) 2022 Kaili Hill
  * 
  */

@@ -1,4 +1,4 @@
-To build and flash with a j-link:
+To build and flash:
 
 ```bash
 
@@ -20,7 +20,15 @@ cd build
 # Configure cmake. To use NTSC, set -DREGION=NTSC
 # If you have more than 2MB flash, you need to change the flash size by adding -DFLASH_SIZE_MB={one of 2,4,8,16} here.
 
-cmake -DREGION=PAL ..
+For European N64s
+`cmake -DREGION=PAL ..`
+    * If using a weact pico clone (e.g. purchased from dreamcraftindustries.com)
+    `cmake -DREGION=PAL -DFLASH_SIZE_MB=16`
+
+For North American N64s
+`cmake -DREGION=NTSC ..`
+    * If using a weact pico clone (e.g. purchased from dreamcraftindustries.com)
+    `cmake -DREGION=NTSC -DFLASH_SIZE_MB=16`
 
 # Build
 make
