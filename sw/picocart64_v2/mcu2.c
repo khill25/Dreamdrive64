@@ -123,9 +123,9 @@ void main_task_entry(__unused void *params)
 	printf("Finished!\n");
 
 	// Setup PIO UART
-	printf("Initing MCU1<->MCU2 serial bridge...");
-	pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
-	printf("Finshed!\n");
+	// printf("Initing MCU1<->MCU2 serial bridge...");
+	// pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
+	// printf("Finshed!\n");
 
 	// Random test stuff, leave in for now as still heavily debugging
 	// vTaskDelay(5000);

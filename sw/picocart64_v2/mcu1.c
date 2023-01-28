@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -109,9 +110,141 @@ void process_log_buffer() {
 	}
 }
 
+volatile uint16_t* word_buff2;
+volatile int sentWord2 = 1;
+uint16_t t(int dma_chan) {
+	if (sentWord2 == 1) {
+		dma_channel_start(dma_chan);
+		dma_channel_wait_for_finish_blocking(dma_chan);
+	}
+	
+	volatile uint16_t t = word_buff2[sentWord2--];
+
+	if (sentWord2 == -1) {
+		sentWord2 = 1;
+	}
+
+	return t;
+}
+
+volatile uint16_t fetched_word32 = 0;
+void testReadRomData() {
+	volatile uint16_t *ptr = (volatile uint16_t *)0x13000000;
+	volatile uint16_t startingWord = ptr[0];
+	printf("\n\nStarting word: %08x\n", startingWord);
+
+	int clk_step = 10;
+
+	uint32_t cycleCountStart = 0;
+	uint32_t totalTime = 0;
+	int psram_csToggleTime = 0;
+	int total_memoryAccessTime = 0;
+	int totalReadTime = 0;
+	uint32_t endTimeBuffer[128] = {0};
+	uint32_t startTimeBuffer[128] = {0};
+	systick_hw->csr = 0x5;
+    systick_hw->rvr = 0x00FFFFFF;
+
+	// while(1) {
+
+// for (int o = 0; o < 128; o++) {
+// 	uint32_t modifiedAddress = o;
+// 	uint32_t startTime_us = time_us_32();
+// 	startTimeBuffer[o] = systick_hw->cvr;
+// 	uint16_t word16 = ptr[modifiedAddress];
+// 	endTimeBuffer[o] = systick_hw->cvr;
+// 	totalReadTime += time_us_32() - startTime_us;
+
+// 	if (o < 16) { // only print the first 16 words
+// 		printf("[%08x]: %04x\n", o * 4, word16);
+// 	}
+// }
+
+	// 	fetched_word32 = ptr[0];
+	// 	sleep_ms(500);
+	// }
+
+	printf("%d us\n\n\n", totalReadTime);
+
+	// uint32_t worst = 0;
+	// uint32_t best = UINT32_MAX;
+	// uint64_t totalCycles = 0;
+	// for (int i = 0; i < 128; i++) {
+	// 	uint32_t cycles = 0;
+	// 	if (startTimeBuffer[i] > endTimeBuffer[i]) {
+	// 		cycles = startTimeBuffer[i] - endTimeBuffer[i];
+	// 	} else {
+	// 		cycles = endTimeBuffer[i] - startTimeBuffer[i];
+	// 	}
+		
+	// 	if (cycles > worst) {
+	// 		worst = cycles;
+	// 	}
+	// 	if (cycles < best) {
+	// 		best = cycles;
+	// 	}
+		
+	// 	totalCycles += (uint64_t)cycles;
+	// 	// printf("%u\n", cycles);
+	// }
+
+	// printf("Best: %u, worst: %u, average: %u\n", best, worst, (uint32_t)(totalCycles / 128));
+	// printf("Best: %uns, worst: %uns, average: %uns\n", (uint32_t)(best * 3.76), (uint32_t)(worst * 3.76), (uint32_t)((totalCycles / 128) * 3.76));
+
+	uint16_t *rxbuf = malloc(128*2);
+
+// Get a free channel, panic() if there are none
+    int chan = dma_claim_unused_channel(true);
+
+    // 8 bit transfers. Both read and write address increment after each
+    // transfer (each pointing to a location in src or dst respectively).
+    // No DREQ is selected, so the DMA transfers as fast as it can.
+
+    dma_channel_config c = dma_channel_get_default_config(chan);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+	channel_config_set_bswap(&c, true);
+
+	word_buff2 = malloc(4);
+
+    dma_channel_configure(
+        chan,          // Channel to be configured
+        &c,            // The configuration we just created
+        word_buff2,           // The initial write address
+        ptr,           // The initial read address
+        1, // Number of transfers;
+        false           
+    );
+	
+
+    // We could choose to go and do something else whilst the DMA is doing its
+    // thing. In this case the processor has nothing else to do, so we just
+    // wait for the DMA to finish.
+
+	printf("%04x ", t(chan));
+	printf("%04x ", t(chan));
+
+
+	// uint32_t startTime_us = time_us_32();
+	// for (int i = 0; i < 128; i+=2) {
+	// 	dma_channel_start(chan);
+    // 	dma_channel_wait_for_finish_blocking(chan);
+	// 	// printf("%04x %04x\n", rxbuf[i], rxbuf[i+1]);
+	// }
+	// uint32_t totalTime_us = time_us_32() - startTime_us;
+
+	// for (int i = 0; i < 1; i+=2) {
+	// 	printf("%04x %04x\n", rxbuf[i+1], rxbuf[i]);
+	// }
+	// printf("DMA 128 32bit reads %uus\n", totalTime_us);
+
+	dma_channel_unclaim(chan);
+}
+
 uint32_t last_rom_cache_update_address = 0;
 void __no_inline_not_in_flash_func(mcu1_core1_entry)() {	
-	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms
+	// pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms
 
 	bool readingData = false;
 	bool startJoybus = false;
@@ -119,7 +252,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 
 	// Some debug and test variables
 	volatile bool hasInit = false;
-	volatile bool test_load = false;
+	volatile bool test_load = true;
 	volatile uint32_t t = 0;
 	volatile uint32_t it = 0;
 	volatile uint32_t t2 = 0;
@@ -135,77 +268,79 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 
 		if (startJoybus) {
 			startJoybus = false;
-			enable_joybus();
+			// enable_joybus();
 		}
 
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds
 		// then power on the n64. Not for the faint of heart.
-		// if (t2 == 2 && !hasInit) {
-		// 	hasInit = true;
-		// 	set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
-		// 	uint currentChipIndex = START_ROM_LOAD_CHIP_INDEX;
-		// 	current_mcu_enable_demux(true);
-		// 	psram_set_cs(currentChipIndex);
-		// 	program_connect_internal_flash();
-		// 	program_flash_exit_xip();
+		if (t2 == 2 && !hasInit && test_load) {
+			hasInit = true;
+			set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
+			uint currentChipIndex = START_ROM_LOAD_CHIP_INDEX;
+			current_mcu_enable_demux(true);
+			psram_set_cs(currentChipIndex);
+			program_connect_internal_flash();
+			program_flash_exit_xip();
 
-		// 	psram_set_cs(currentChipIndex);
-		// 	program_flash_do_cmd(0x35, NULL, NULL, 0);
+			psram_set_cs(currentChipIndex);
+			program_flash_do_cmd(0x35, NULL, NULL, 0);
 
-		// 	psram_set_cs(currentChipIndex + 1);
-		// 	program_flash_do_cmd(0x35, NULL, NULL, 0);
+			psram_set_cs(currentChipIndex + 1);
+			program_flash_do_cmd(0x35, NULL, NULL, 0);
 
-		// 	psram_set_cs(currentChipIndex + 2);
-		// 	program_flash_do_cmd(0x35, NULL, NULL, 0);
+			psram_set_cs(currentChipIndex + 2);
+			program_flash_do_cmd(0x35, NULL, NULL, 0);
 
-		// 	psram_set_cs(currentChipIndex + 3);
-		// 	program_flash_do_cmd(0x35, NULL, NULL, 0);
+			psram_set_cs(currentChipIndex + 3);
+			program_flash_do_cmd(0x35, NULL, NULL, 0);
 
-		// 	// Flush cache
-		// 	program_flash_flush_cache();
+			// Flush cache
+			program_flash_flush_cache();
 
-		// 	program_flash_enter_cmd_xip(true); // psram quad mode
+			program_flash_enter_cmd_xip(true); // psram quad mode
 
-		// 	psram_set_cs(START_ROM_LOAD_CHIP_INDEX); // Set back to start index
+			psram_set_cs(START_ROM_LOAD_CHIP_INDEX); // Set back to start index
 
-		// 	// rom is loaded now
-		// 	g_loadRomFromMemoryArray = true; // read from psram
-		// 	isWaitingForRomLoad = false;
-		// 	sd_is_busy = false;
-		// 	readingData = false;
-		// 	startJoybus = true;
-		// }
+			testReadRomData();
+
+			// rom is loaded now
+			g_loadRomFromMemoryArray = true; // read from psram
+			isWaitingForRomLoad = false;
+			sd_is_busy = false;
+			readingData = false;
+			startJoybus = true;
+		}
 
 		// Do a rom load test after x seconds
 		// This is useful for loading a rom into psram while the device is
 		// connected to usb power for quicker rom loads and code testing.
 		// Bit of a hack to get working and probably not for the faint of heart.
-		if(test_load && t2 > 1) {
-			test_load = false;
-			printf("Disabling mcu1 qspi\n");
-			// pc64_set_sd_rom_selection("Donkey Kong 64 (U) [!].z64", 27);
-			//pc64_set_sd_rom_selection("GoldenEye 007 (U) [!].z64", 27);
-			// pc64_set_sd_rom_selection("007 - The World is Not Enough (U) [!].z64", 42);
-			// sd_is_busy = true;
-			// romLoading = true;
-			// isWaitingForRomLoad = true;
+		// if(test_load && t2 > 1) {
+		// 	test_load = false;
+		// 	printf("Disabling mcu1 qspi\n");
+		// 	// pc64_set_sd_rom_selection("Donkey Kong 64 (U) [!].z64", 27);
+		// 	//pc64_set_sd_rom_selection("GoldenEye 007 (U) [!].z64", 27);
+		// 	// pc64_set_sd_rom_selection("007 - The World is Not Enough (U) [!].z64", 42);
+		// 	// sd_is_busy = true;
+		// 	// romLoading = true;
+		// 	// isWaitingForRomLoad = true;
 			
-			// readingData = true;
-			// rx_uart_buffer_reset();
+		// 	// readingData = true;
+		// 	// rx_uart_buffer_reset();
 
-			// Turn off the qspi hardware so mcu2 can use it
-			current_mcu_enable_demux(false);
-			ssi_hw->ssienr = 0;
-			qspi_disable();
+		// 	// Turn off the qspi hardware so mcu2 can use it
+		// 	current_mcu_enable_demux(false);
+		// 	ssi_hw->ssienr = 0;
+		// 	qspi_disable();
 
-			// Something about the above code to turn off qspi
-			// causing the pi loop to behave oddly.
-			// This will restart the loop.
-			g_restart_pi_handler = true;
+		// 	// Something about the above code to turn off qspi
+		// 	// causing the pi loop to behave oddly.
+		// 	// This will restart the loop.
+		// 	g_restart_pi_handler = true;
 
-			// pc64_send_load_new_rom_command();
-		}
+		// 	// pc64_send_load_new_rom_command();
+		// }
 
 		// Handle joy_bus requests
 		// if (process_joybus_buf) {
@@ -428,7 +563,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// Enable STDIO, typically disabled on mcu1 as the uart pin is being used
 	// for serial comms to mcu2.
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
-	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
+	stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
 	printf("\n\nMCU1: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 

@@ -8,6 +8,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <hardware/dma.h>
 
 // #include "pico/stdlib.h"
 // #include "pico/stdio.h"
@@ -48,8 +50,11 @@ volatile int g_currentMemoryArrayChip = 3;
 volatile uint32_t address_modifier = 0;
 volatile bool g_loadRomFromMemoryArray = false;
 static uint n64_pi_pio_offset;
-// volatile uint16_t *ptr16 = (volatile uint16_t *)0x10000000;
+
 volatile uint16_t *ptr16 = (volatile uint16_t *)0x13000000; // no cache
+volatile int dma_chan = -1;
+volatile int sentWord = 1;
+volatile uint16_t *word_buff;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
 
@@ -78,24 +83,36 @@ uint32_t g_addressModifierTable[] = {
 };
 volatile uint32_t tempChip = 0;
 inline uint16_t rom_read(uint32_t rom_address) {
-#if COMPRESSED_ROM
-	if (!g_loadRomFromMemoryArray) {
-		uint32_t chunk_index = rom_mapping[(rom_address & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
-		const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
-		return chunk_16[(rom_address & COMPRESSION_MASK) >> 1];
-	} else {
-		tempChip = psram_addr_to_chip(rom_address);
-		if (tempChip != g_currentMemoryArrayChip) {
-			g_currentMemoryArrayChip = tempChip;
+// #if COMPRESSED_ROM
+// 	if (!g_loadRomFromMemoryArray) {
+// 		uint32_t chunk_index = rom_mapping[(rom_address & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
+// 		const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
+// 		return chunk_16[(rom_address & COMPRESSION_MASK) >> 1];
+// 	} else {
+// 		tempChip = psram_addr_to_chip(rom_address);
+// 		if (tempChip != g_currentMemoryArrayChip) {
+// 			g_currentMemoryArrayChip = tempChip;
 
-			// Set the new chip
-			psram_set_cs(g_currentMemoryArrayChip);
-		}
-		return ptr16[(((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
+// 			// Set the new chip
+// 			psram_set_cs(g_currentMemoryArrayChip);
+// 		}
+// 		return ptr16[(((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
+// 	}
+// #else
+// 	return rom_file_16[(last_addr & 0xFFFFFF) >> 1];
+// #endif
+	if (sentWord == 1) {
+		dma_channel_start(dma_chan);
+		dma_channel_wait_for_finish_blocking(dma_chan);
 	}
-#else
-	return rom_file_16[(last_addr & 0xFFFFFF) >> 1];
-#endif
+	
+	volatile uint16_t t = word_buff[sentWord--];
+
+	if (sentWord == -1) {
+		sentWord = 1;
+	}
+
+	return t;
 }
 
 void restart_n64_pi_pio() {
@@ -146,9 +163,25 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	PIO pio = pio0;
 	n64_pi_pio_offset = pio_add_program(pio, &n64_pi_program);
 	n64_pi_program_init(pio, 0, n64_pi_pio_offset);
-	// pio_sm_set_clkdiv(pio, 0, 2);
-	
 	pio_sm_set_enabled(pio, 0, true);
+
+	dma_chan = dma_claim_unused_channel(true);
+	dma_channel_config c = dma_channel_get_default_config(dma_chan);
+	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+	channel_config_set_read_increment(&c, true);
+	channel_config_set_write_increment(&c, false);
+	channel_config_set_bswap(&c, true);
+
+	word_buff = malloc(4); // 2 16 bit values
+
+	dma_channel_configure(
+		dma_chan,        // Channel to be configured
+		&c,              // The configuration we just created
+		word_buff,    // The initial write address //&pio0->txf[0]
+		ptr16,           // The initial read address
+		1, 				 // Number of transfers;
+		false           
+	);
 
 	// Wait for reset to be released
 	while (gpio_get(PIN_N64_COLD_RESET) == 0) {
@@ -159,6 +192,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	volatile uint32_t last_addr;
 	volatile uint32_t addr;
 	volatile uint32_t next_word;
+	
 
 	// Read addr manually before the loop
 	addr = n64_pi_get_value(pio);
@@ -209,10 +243,10 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			// next_word = 0xFF40;
+			next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
-			next_word = 0x4040; // boots @ 266
+			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x2040; 
 		
 			addr = n64_pi_get_value(pio);
@@ -222,7 +256,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			last_addr += 2;
 
 			// Pre-fetch
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
 			next_word = rom_read(last_addr);
+			// printf("[%08x] %04x\n", last_addr, next_word);
 
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
@@ -264,24 +300,33 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			} while (1);
 		} else if (last_addr >= 0x10000000 && last_addr <= 0x1FBFFFFF) {
 			// Domain 1, Address 2 Cartridge ROM
+			// printf("START\n");
+			tempChip = psram_addr_to_chip(last_addr);
+			if (tempChip != g_currentMemoryArrayChip) {
+				g_currentMemoryArrayChip = tempChip;
+				// Set the new chip
+				psram_set_cs(g_currentMemoryArrayChip);
+			}
+
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			sentWord = 1;
+
 			do {
-				// Pre-fetch from the address
+				
 				next_word = rom_read(last_addr);
-				// uart_tx_program_putc((uint8_t)(next_word >> 8));
-				// uart_tx_program_putc((uint8_t)(next_word));
 
-				// uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
-				// const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
-				// next_word = chunk_16[(last_addr & COMPRESSION_MASK) >> 1];
-
+				// Pre-fetch from the address
+				// next_word = rom_read(last_addr);
 				addr = n64_pi_get_value(pio);
-				// printf("%04x\n", addr);
 
 				if (addr == 0) {
 					// READ
  handle_d1a2_read:
-					// uart_tx_program_putc(0xD);
-					pio_sm_put(pio, 0, swap8(next_word));
+					// pio_sm_put(pio, 0, swap8(next_word));
+					// pio->txf[0] = swap8(next_word);
+					pio->txf[0] = next_word;
+					// printf("[%08x] %04x ", last_addr, next_word);
+					// dma_channel_start(dma_chan);
 					last_addr += 2;
 				} else if (addr & 0x00000001) {
 					// WRITE
@@ -289,6 +334,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					last_addr += 2;
 				} else {
 					// New address
+					// printf(".\n");
 					break;
 				}
 
