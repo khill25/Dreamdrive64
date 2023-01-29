@@ -130,6 +130,7 @@ uint16_t t(int dma_chan) {
 volatile uint16_t fetched_word32 = 0;
 void testReadRomData() {
 	volatile uint16_t *ptr = (volatile uint16_t *)0x13000000;
+	volatile uint32_t *ptr32 = (volatile uint32_t *)0x13000000;
 	volatile uint16_t startingWord = ptr[0];
 	printf("\n\nStarting word: %08x\n", startingWord);
 
@@ -147,24 +148,24 @@ void testReadRomData() {
 
 	// while(1) {
 
-// for (int o = 0; o < 128; o++) {
-// 	uint32_t modifiedAddress = o;
-// 	uint32_t startTime_us = time_us_32();
-// 	startTimeBuffer[o] = systick_hw->cvr;
-// 	uint16_t word16 = ptr[modifiedAddress];
-// 	endTimeBuffer[o] = systick_hw->cvr;
-// 	totalReadTime += time_us_32() - startTime_us;
+	for (int o = 0; o < 128; o++) {
+		uint32_t modifiedAddress = o;
+		uint32_t startTime_us = time_us_32();
+		startTimeBuffer[o] = systick_hw->cvr;
+		uint16_t word16 = ptr[modifiedAddress];
+		endTimeBuffer[o] = systick_hw->cvr;
+		totalReadTime += time_us_32() - startTime_us;
 
-// 	if (o < 16) { // only print the first 16 words
-// 		printf("[%08x]: %04x\n", o * 4, word16);
-// 	}
-// }
+		if (o < 16) { // only print the first 16 words
+			printf("[%08x]: %04x\n", o * 4, word16);
+		}
+	}
 
 	// 	fetched_word32 = ptr[0];
 	// 	sleep_ms(500);
 	// }
 
-	printf("%d us\n\n\n", totalReadTime);
+	printf("128 16bit reads %d us\n\n\n", totalReadTime);
 
 	// uint32_t worst = 0;
 	// uint32_t best = UINT32_MAX;
@@ -222,22 +223,33 @@ void testReadRomData() {
     // thing. In this case the processor has nothing else to do, so we just
     // wait for the DMA to finish.
 
-	printf("%04x ", t(chan));
-	printf("%04x ", t(chan));
+	uint32_t startTime_us = time_us_32();
+	for (int i = 0; i < 128; i++) {
+		// dma_channel_start(chan);
+    	// dma_channel_wait_for_finish_blocking(chan);
+		// printf("%04x %04x\n", rxbuf[i], rxbuf[i+1]);
 
+		// rxbuf[i] = t(chan);
 
-	// uint32_t startTime_us = time_us_32();
-	// for (int i = 0; i < 128; i+=2) {
-	// 	dma_channel_start(chan);
-    // 	dma_channel_wait_for_finish_blocking(chan);
-	// 	// printf("%04x %04x\n", rxbuf[i], rxbuf[i+1]);
-	// }
-	// uint32_t totalTime_us = time_us_32() - startTime_us;
+		if (sentWord2 == 1) {
+			// dma_channel_start(chan);
+			dma_hw->multi_channel_trigger = 1u << chan;
+			while(!!(dma_hw->ch[chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) tight_loop_contents();
+			// dma_channel_wait_for_finish_blocking(chan);
+		}
+		
+		rxbuf[i] = word_buff2[sentWord2--];
 
-	// for (int i = 0; i < 1; i+=2) {
-	// 	printf("%04x %04x\n", rxbuf[i+1], rxbuf[i]);
-	// }
-	// printf("DMA 128 32bit reads %uus\n", totalTime_us);
+		if (sentWord2 == -1) {
+			sentWord2 = 1;
+		}
+	}
+	uint32_t totalTime_us = time_us_32() - startTime_us;
+
+	for (int i = 0; i < 32; i+=2) {
+		printf("%04x %04x\n", rxbuf[i+1], rxbuf[i]);
+	}
+	printf("DMA 128 16bit reads %uus\n", totalTime_us);
 
 	dma_channel_unclaim(chan);
 }

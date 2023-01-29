@@ -243,11 +243,12 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			next_word = 0xFF40;
+			// next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x2040; 
+			next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
 
@@ -313,10 +314,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 			do {
 				
+				// Pre-fetch from the address
 				next_word = rom_read(last_addr);
 
-				// Pre-fetch from the address
-				// next_word = rom_read(last_addr);
 				addr = n64_pi_get_value(pio);
 
 				if (addr == 0) {
@@ -325,8 +325,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					// pio_sm_put(pio, 0, swap8(next_word));
 					// pio->txf[0] = swap8(next_word);
 					pio->txf[0] = next_word;
-					// printf("[%08x] %04x ", last_addr, next_word);
-					// dma_channel_start(dma_chan);
 					last_addr += 2;
 				} else if (addr & 0x00000001) {
 					// WRITE
