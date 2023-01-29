@@ -187,19 +187,19 @@ void load_new_rom(char* filename) {
 
     // TODO read the file header and lookup the eeprom save size
 
-    printf("Sending eeprom type to mcu1\n");
-    uart_tx_program_putc(COMMAND_START);
-    uart_tx_program_putc(COMMAND_START2);
-    uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
-    uart_tx_program_putc(0);
-    uart_tx_program_putc(2);
-    uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
-    uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
+    // printf("Sending eeprom type to mcu1\n");
+    // uart_tx_program_putc(COMMAND_START);
+    // uart_tx_program_putc(COMMAND_START2);
+    // uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
+    // uart_tx_program_putc(0);
+    // uart_tx_program_putc(2);
+    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
+    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
 
     // Busy wait for a few cycles then send eeprom data
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
-    load_eeprom_from_sd();
+    // load_eeprom_from_sd();
 
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
@@ -319,13 +319,13 @@ void load_new_rom(char* filename) {
 
     printf("Rom Loaded, MCU2 qspi: OFF, sending mcu1 rom loaded command\n");
 
-    // Let MCU1 know that we are finished
-    uart_tx_program_putc(COMMAND_START);
-    uart_tx_program_putc(COMMAND_START2);
-    uart_tx_program_putc(COMMAND_ROM_LOADED);
-    // Zero bytes to read!
-    uart_tx_program_putc(0x00);
-    uart_tx_program_putc(0x00);
+    // // Let MCU1 know that we are finished
+    // uart_tx_program_putc(COMMAND_START);
+    // uart_tx_program_putc(COMMAND_START2);
+    // uart_tx_program_putc(COMMAND_ROM_LOADED);
+    // // Zero bytes to read!
+    // uart_tx_program_putc(0x00);
+    // uart_tx_program_putc(0x00);
 }
 
 // MCU listens for other MCU commands and will respond accordingly

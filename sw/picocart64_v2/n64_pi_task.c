@@ -53,8 +53,10 @@ static uint n64_pi_pio_offset;
 
 volatile uint16_t *ptr16 = (volatile uint16_t *)0x13000000; // no cache
 volatile int dma_chan = -1;
-volatile int sentWord = 1;
-volatile uint16_t *word_buff;
+volatile int dma_chan_high = -1;
+volatile uint16_t *dmaBuffer;
+volatile uint16_t *dmaBufferHigh;
+volatile uint32_t dma_bi = 0;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
 
@@ -82,37 +84,42 @@ uint32_t g_addressModifierTable[] = {
 	PSRAM_ADDRESS_MODIFIER_5
 };
 volatile uint32_t tempChip = 0;
-inline uint16_t rom_read(uint32_t rom_address) {
-// #if COMPRESSED_ROM
-// 	if (!g_loadRomFromMemoryArray) {
-// 		uint32_t chunk_index = rom_mapping[(rom_address & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
-// 		const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
-// 		return chunk_16[(rom_address & COMPRESSION_MASK) >> 1];
-// 	} else {
-// 		tempChip = psram_addr_to_chip(rom_address);
-// 		if (tempChip != g_currentMemoryArrayChip) {
-// 			g_currentMemoryArrayChip = tempChip;
+inline uint16_t rom_read(uint32_t rom_address, bool *isInitialLoad) {
+	uint16_t next_word = 0;
 
-// 			// Set the new chip
-// 			psram_set_cs(g_currentMemoryArrayChip);
-// 		}
-// 		return ptr16[(((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
-// 	}
-// #else
-// 	return rom_file_16[(last_addr & 0xFFFFFF) >> 1];
-// #endif
-	if (sentWord == 1) {
-		dma_channel_start(dma_chan);
-		dma_channel_wait_for_finish_blocking(dma_chan);
+	if (dma_bi == 0) {
+		if (!isInitialLoad) {
+			dma_channel_wait_for_finish_blocking(dma_chan);
+		}
+		
+		next_word = dmaBuffer[1];
+		
+		if (!isInitialLoad) {
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+		}
+
+	} else if (dma_bi == 1) {
+		next_word = dmaBuffer[0];
+	} else if (dma_bi == 2) {
+		if (!isInitialLoad) {
+			dma_channel_wait_for_finish_blocking(dma_chan);
+		}
+		
+		next_word = dmaBuffer[3];
+
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
+	} else if (dma_bi == 3) {
+		next_word = dmaBuffer[2];
+		*isInitialLoad = false;
 	}
-	
-	volatile uint16_t t = word_buff[sentWord--];
 
-	if (sentWord == -1) {
-		sentWord = 1;
+	if(dma_bi = 3) {
+		dma_bi = 0;
+	} else {
+		dma_bi++;
 	}
 
-	return t;
+	return next_word;
 }
 
 void restart_n64_pi_pio() {
@@ -168,20 +175,38 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	dma_chan = dma_claim_unused_channel(true);
 	dma_channel_config c = dma_channel_get_default_config(dma_chan);
 	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-	channel_config_set_read_increment(&c, true);
+	channel_config_set_read_increment(&c, false);
 	channel_config_set_write_increment(&c, false);
 	channel_config_set_bswap(&c, true);
 
-	word_buff = malloc(4); // 2 16 bit values
+	dmaBuffer = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
+	dmaBufferHigh = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
 
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
 		&c,              // The configuration we just created
-		word_buff,    // The initial write address //&pio0->txf[0]
+		dmaBuffer,    // The initial write address //&pio0->txf[0]
 		ptr16,           // The initial read address
 		1, 				 // Number of transfers;
 		false           
 	);
+
+	dma_chan_high = dma_claim_unused_channel(true);
+	// dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
+	// channel_config_set_transfer_data_size(&c_high, DMA_SIZE_32);
+	// channel_config_set_read_increment(&c_high, true);
+	// channel_config_set_write_increment(&c_high, false);
+	// channel_config_set_bswap(&c_high, true);
+
+	dma_channel_configure(
+		dma_chan_high,        // Channel to be configured
+		&c,              // The configuration we just created
+		dmaBufferHigh,    // The initial write address //&pio0->txf[0]
+		ptr16,           // The initial read address
+		1, 				 // Number of transfers;
+		false           
+	);
+
 
 	// Wait for reset to be released
 	while (gpio_get(PIN_N64_COLD_RESET) == 0) {
@@ -243,12 +268,12 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			// next_word = 0xFF40;
+			next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x2040; 
-			next_word = 0x1240;
+			// next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
 
@@ -257,10 +282,24 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			last_addr += 2;
 
 			// Pre-fetch
-			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			next_word = rom_read(last_addr);
-			// printf("[%08x] %04x\n", last_addr, next_word);
+			uint32_t ptrIndex = ((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1;
+			dma_channel_set_read_addr(dma_chan, ptr16 + (ptrIndex), false);
+			
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+			// dma_channel_wait_for_finish_blocking(dma_chan);
 
+			// dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true);
+			// dma_channel_wait_for_finish_blocking(dma_chan_high);
+			
+			bool isInitialLoad = true;
+			// next_word = rom_read(last_addr, &isInitialRead);
+
+			if (dma_bi == 0) {
+				dma_channel_wait_for_finish_blocking(dma_chan);
+				next_word = dmaBuffer[1];
+				dma_bi++;
+			}
+			
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
 			// uart_print_hex_u32(addr);
@@ -309,13 +348,47 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				psram_set_cs(g_currentMemoryArrayChip);
 			}
 
-			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			sentWord = 1;
+			volatile uint32_t ptrIndex = ((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1;
+			dma_channel_set_read_addr(dma_chan, ptr16 + (ptrIndex), false);
+			//dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+		
+			// Pre-load the buffer
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+			// dma_channel_wait_for_finish_blocking(chan);
+
+			dma_channel_set_read_addr(dma_chan_high, ptr16+ptrIndex+2, false); // increment the ptr for this channel too
+			dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true);
+
+			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+			// dma_channel_wait_for_finish_blocking(dma_chan);
+			dma_bi = 0; // reset buffer index
+			volatile bool isInitialLoad = false;
 
 			do {
-				
-				// Pre-fetch from the address
-				next_word = rom_read(last_addr);
+				// next_word = rom_read(last_addr, &isInitialRead);
+				if (dma_bi == 0) {
+					dma_channel_wait_for_finish_blocking(dma_chan);
+					next_word = dmaBuffer[1];
+					dma_bi++;
+				} else if (dma_bi == 1) {
+					// dma_channel_wait_for_finish_blocking(dma_chan);
+					next_word = dmaBuffer[0];
+
+					dma_channel_set_read_addr(dma_chan, ptr16+(3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)), false); // increment the ptr for this channel too
+					dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+					dma_bi++;
+				} else if (dma_bi == 2) {
+					dma_channel_wait_for_finish_blocking(dma_chan_high);
+					next_word = dmaBufferHigh[1];
+					dma_bi++;
+				} else if (dma_bi == 3) {
+					// dma_channel_wait_for_finish_blocking(dma_chan_high);
+					next_word = dmaBufferHigh[0];
+
+					dma_channel_set_read_addr(dma_chan_high, ptr16+(3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)), false); // increment the ptr for this channel too
+					dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true); // start load of next word but at position 0, so we wrap our buffer around
+					dma_bi = 0;
+				}
 
 				addr = n64_pi_get_value(pio);
 
@@ -332,7 +405,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					last_addr += 2;
 				} else {
 					// New address
-					// printf(".\n");
 					break;
 				}
 
