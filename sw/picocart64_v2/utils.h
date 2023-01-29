@@ -34,4 +34,4 @@ void assert_handler(char *file, int line, char *statement);
 #define LIKELY(x)    __builtin_expect ((x), 1)
 #define UNLIKELY(x)  __builtin_expect ((x), 0)
 
-uint16_t rom_read(uint32_t rom_address, bool *isInitialLoad);
+uint16_t rom_read(uint32_t rom_address);

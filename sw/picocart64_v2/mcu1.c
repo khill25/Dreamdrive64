@@ -110,20 +110,34 @@ void process_log_buffer() {
 	}
 }
 
-// volatile int sentWord2 = 1;
-// uint16_t t(int dma_chan) {
-// 	if (sentWord2 == 1) {
-// 		dma_channel_start(dma_chan);
-// 	}
-	
-// 	volatile uint16_t t = word_buff2[sentWord2--];
+static int dma_bi = 0;
+static uint16_t* dmaBuffer;
+uint16_t rom_read_test(int dma_chan) {
+	uint16_t next_word = 0;
+	if (dma_bi == 0) {
+		dma_channel_wait_for_finish_blocking(dma_chan);
+		next_word = (uint16_t)dmaBuffer[1];
+		// dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+		dma_channel_start(dma_chan);
+		dma_bi++;
 
-// 	if (sentWord2 == -1) {
-// 		sentWord2 = 1;
-// 	}
+	} else if (dma_bi == 1) {
+		next_word = (uint16_t)dmaBuffer[0];
+		dma_bi++;
 
-// 	return t;
-// }
+	} else if (dma_bi == 2) {
+		dma_channel_wait_for_finish_blocking(dma_chan);
+		next_word = (uint16_t)dmaBuffer[3];
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
+		dma_bi++;
+
+	} else if (dma_bi == 3) {
+		next_word = (uint16_t)dmaBuffer[2];
+		dma_bi = 0;
+	}
+
+	return next_word;
+}
 
 volatile uint16_t fetched_word32 = 0;
 void testReadRomData() {
@@ -203,10 +217,10 @@ void testReadRomData() {
     dma_channel_config c = dma_channel_get_default_config(chan);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
 	channel_config_set_bswap(&c, true);
 
-	uint16_t* dmaBuffer = malloc(sizeof(uint32_t) * 2);
+	dmaBuffer = malloc(sizeof(uint32_t) * 2);
 
     dma_channel_configure(
         chan,          // Channel to be configured
@@ -243,45 +257,37 @@ void testReadRomData() {
 	
 	// dma_channel_set_write_addr(chan, &dmaBuffer[0], true);
 	dma_channel_start(chan);
-	dma_channel_wait_for_finish_blocking(chan);
-
-	// dma_channel_set_read_addr(dma_chan, &ptr[2], false); // increment the ptr for this channel too
-	dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
-	// dma_channel_start(chan);
-	// dma_channel_wait_for_finish_blocking(chan);
-
-	uint32_t bi = 0; // buffer index
-	// In the loop example, i would be bi
-	bool isInitialLoad = true;
 
 	uint32_t startTime_us = time_us_32();
 	for (int i = 0; i < 128; i++) {
 
-		if (bi == 0) {
-			dma_channel_wait_for_finish_blocking(chan);
-			rxbuf[i] = dmaBuffer[1];
-			bi++;
+		rxbuf[i] = rom_read_test(chan);
 
-			if (!isInitialLoad) {
-				// dma_channel_set_read_addr(chan, ptr+i+3, false); // increment the ptr for this channel too
-				dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
-			}
-			isInitialLoad = false;
-		} else if (bi == 1) {
-			rxbuf[i] = dmaBuffer[0];
-			bi++;
-		} else if (bi == 2) {
-			dma_channel_wait_for_finish_blocking(chan);
-			rxbuf[i] = dmaBuffer[3];
+		// if (bi == 0) {
+		// 	dma_channel_wait_for_finish_blocking(chan);
+		// 	rxbuf[i] = dmaBuffer[1];
+		// 	bi++;
 
-			// dma_channel_set_read_addr(dma_chan, ptr+i+3, false); // increment the ptr for this channel too
-			dma_channel_set_write_addr(chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
-			bi++;
-		} else if (bi == 3) {
-			// dma_channel_wait_for_finish_blocking(dma_chan_high);
-			rxbuf[i] = dmaBuffer[2];
-			bi = 0;
-		}
+		// 	if (!isInitialLoad) {
+		// 		// dma_channel_set_read_addr(chan, ptr+i+3, false); // increment the ptr for this channel too
+		// 		dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
+		// 	}
+		// 	isInitialLoad = false;
+		// } else if (bi == 1) {
+		// 	rxbuf[i] = dmaBuffer[0];
+		// 	bi++;
+		// } else if (bi == 2) {
+		// 	dma_channel_wait_for_finish_blocking(chan);
+		// 	rxbuf[i] = dmaBuffer[3];
+
+		// 	// dma_channel_set_read_addr(dma_chan, ptr+i+3, false); // increment the ptr for this channel too
+		// 	dma_channel_set_write_addr(chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
+		// 	bi++;
+		// } else if (bi == 3) {
+		// 	// dma_channel_wait_for_finish_blocking(dma_chan_high);
+		// 	rxbuf[i] = dmaBuffer[2];
+		// 	bi = 0;
+		// }
 
 		// dma_channel_wait_for_finish_blocking(chan);
 
