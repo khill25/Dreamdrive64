@@ -155,7 +155,7 @@ void testReadRomData() {
 		totalReadTime += time_us_32() - startTime_us;
 
 		if (o < 16) { // only print the first 16 words
-			printf("[%08x]: %04x\n", o * 4, swap8(word16));
+			printf("[%08x]: %04x\n", o * 4, (uint16_t)swap8(word16));
 		}
 	}
 
@@ -194,6 +194,7 @@ void testReadRomData() {
 
 // Get a free channel, panic() if there are none
     int chan = dma_claim_unused_channel(true);
+	// int dma_chan = chan;
 
     // 8 bit transfers. Both read and write address increment after each
     // transfer (each pointing to a location in src or dst respectively).
@@ -201,7 +202,7 @@ void testReadRomData() {
 
     dma_channel_config c = dma_channel_get_default_config(chan);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    channel_config_set_read_increment(&c, false);
+    channel_config_set_read_increment(&c, true);
     channel_config_set_write_increment(&c, false);
 	channel_config_set_bswap(&c, true);
 
@@ -216,22 +217,22 @@ void testReadRomData() {
         false           
     );
 
-	uint16_t* dmaBufferHigh = malloc(sizeof(uint32_t) * 2);
-	int dma_chan_high = dma_claim_unused_channel(true);
+	// uint16_t* dmaBufferHigh = malloc(sizeof(uint32_t) * 2);
+	// int dma_chan_high = dma_claim_unused_channel(true);
 	// dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
 	// channel_config_set_transfer_data_size(&c_high, DMA_SIZE_32);
 	// channel_config_set_read_increment(&c_high, true);
 	// channel_config_set_write_increment(&c_high, false);
 	// channel_config_set_bswap(&c_high, true);
 
-	dma_channel_configure(
-		dma_chan_high,        // Channel to be configured
-		&c,              // The configuration we just created
-		dmaBufferHigh,    // The initial write address //&pio0->txf[0]
-		ptr,           // The initial read address
-		1, 				 // Number of transfers;
-		false           
-	);
+	// dma_channel_configure(
+	// 	dma_chan_high,        // Channel to be configured
+	// 	&c,              // The configuration we just created
+	// 	dmaBufferHigh,    // The initial write address //&pio0->txf[0]
+	// 	ptr,           // The initial read address
+	// 	1, 				 // Number of transfers;
+	// 	false           
+	// );
 	
 
     // We could choose to go and do something else whilst the DMA is doing its
@@ -239,15 +240,19 @@ void testReadRomData() {
     // wait for the DMA to finish.
 
 	// Preload a few bytes
-	dma_channel_set_write_addr(chan, &dmaBuffer[0], true);
-	// dma_channel_wait_for_finish_blocking(chan);
+	
+	// dma_channel_set_write_addr(chan, &dmaBuffer[0], true);
+	dma_channel_start(chan);
+	dma_channel_wait_for_finish_blocking(chan);
 
-	dma_channel_set_read_addr(dma_chan_high, &ptr[2], false); // increment the ptr for this channel too
-	dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true);
-	// dma_channel_wait_for_finish_blocking(dma_chan_high);
+	// dma_channel_set_read_addr(dma_chan, &ptr[2], false); // increment the ptr for this channel too
+	dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
+	// dma_channel_start(chan);
+	// dma_channel_wait_for_finish_blocking(chan);
 
 	uint32_t bi = 0; // buffer index
 	// In the loop example, i would be bi
+	bool isInitialLoad = true;
 
 	uint32_t startTime_us = time_us_32();
 	for (int i = 0; i < 128; i++) {
@@ -256,21 +261,25 @@ void testReadRomData() {
 			dma_channel_wait_for_finish_blocking(chan);
 			rxbuf[i] = dmaBuffer[1];
 			bi++;
+
+			if (!isInitialLoad) {
+				// dma_channel_set_read_addr(chan, ptr+i+3, false); // increment the ptr for this channel too
+				dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
+			}
+			isInitialLoad = false;
 		} else if (bi == 1) {
-			// dma_channel_wait_for_finish_blocking(chan);
 			rxbuf[i] = dmaBuffer[0];
-			dma_channel_set_read_addr(chan, ptr+i+3, false); // increment the ptr for this channel too
-			dma_channel_set_write_addr(chan, &dmaBuffer[0], true);
 			bi++;
 		} else if (bi == 2) {
-			dma_channel_wait_for_finish_blocking(dma_chan_high);
-			rxbuf[i] = dmaBufferHigh[1];
+			dma_channel_wait_for_finish_blocking(chan);
+			rxbuf[i] = dmaBuffer[3];
+
+			// dma_channel_set_read_addr(dma_chan, ptr+i+3, false); // increment the ptr for this channel too
+			dma_channel_set_write_addr(chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
 			bi++;
 		} else if (bi == 3) {
 			// dma_channel_wait_for_finish_blocking(dma_chan_high);
-			rxbuf[i] = dmaBufferHigh[0];
-			dma_channel_set_read_addr(dma_chan_high, ptr+i+3, false); // increment the ptr for this channel too
-			dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true); // start load of next word but at position 0, so we wrap our buffer around
+			rxbuf[i] = dmaBuffer[2];
 			bi = 0;
 		}
 

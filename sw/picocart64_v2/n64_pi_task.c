@@ -55,7 +55,7 @@ volatile uint16_t *ptr16 = (volatile uint16_t *)0x13000000; // no cache
 volatile int dma_chan = -1;
 volatile int dma_chan_high = -1;
 volatile uint16_t *dmaBuffer;
-volatile uint16_t *dmaBufferHigh;
+// volatile uint16_t *dmaBufferHigh;
 volatile uint32_t dma_bi = 0;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
@@ -175,12 +175,12 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	dma_chan = dma_claim_unused_channel(true);
 	dma_channel_config c = dma_channel_get_default_config(dma_chan);
 	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-	channel_config_set_read_increment(&c, false);
+	channel_config_set_read_increment(&c, true);
 	channel_config_set_write_increment(&c, false);
 	channel_config_set_bswap(&c, true);
+	channel_config_set_high_priority(&c, true);
 
 	dmaBuffer = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
-	dmaBufferHigh = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
 
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
@@ -191,21 +191,22 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		false           
 	);
 
-	dma_chan_high = dma_claim_unused_channel(true);
+	// dmaBufferHigh = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
+	// dma_chan_high = dma_claim_unused_channel(true);
 	// dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
 	// channel_config_set_transfer_data_size(&c_high, DMA_SIZE_32);
 	// channel_config_set_read_increment(&c_high, true);
 	// channel_config_set_write_increment(&c_high, false);
 	// channel_config_set_bswap(&c_high, true);
 
-	dma_channel_configure(
-		dma_chan_high,        // Channel to be configured
-		&c,              // The configuration we just created
-		dmaBufferHigh,    // The initial write address //&pio0->txf[0]
-		ptr16,           // The initial read address
-		1, 				 // Number of transfers;
-		false           
-	);
+	// dma_channel_configure(
+	// 	dma_chan_high,        // Channel to be configured
+	// 	&c,              // The configuration we just created
+	// 	dmaBufferHigh,    // The initial write address //&pio0->txf[0]
+	// 	ptr16,           // The initial read address
+	// 	1, 				 // Number of transfers;
+	// 	false           
+	// );
 
 
 	// Wait for reset to be released
@@ -282,22 +283,14 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			last_addr += 2;
 
 			// Pre-fetch
-			uint32_t ptrIndex = ((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1;
-			dma_channel_set_read_addr(dma_chan, ptr16 + (ptrIndex), false);
-			
-			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-
-			// dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan_high);
-			
-			bool isInitialLoad = true;
-			// next_word = rom_read(last_addr, &isInitialRead);
-
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), true);
+			dma_bi = 0;
 			if (dma_bi == 0) {
 				dma_channel_wait_for_finish_blocking(dma_chan);
 				next_word = dmaBuffer[1];
 				dma_bi++;
+
+				dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
 			}
 			
 			// ROM patching done
@@ -348,45 +341,34 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				psram_set_cs(g_currentMemoryArrayChip);
 			}
 
-			volatile uint32_t ptrIndex = ((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1;
-			dma_channel_set_read_addr(dma_chan, ptr16 + (ptrIndex), false);
-			//dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
 		
-			// Pre-load the buffer
+			// Pre-load the buffer with first 32bits
 			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-			// dma_channel_wait_for_finish_blocking(chan);
-
-			dma_channel_set_read_addr(dma_chan_high, ptr16+ptrIndex+2, false); // increment the ptr for this channel too
-			dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true);
-
-			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
 			// dma_channel_wait_for_finish_blocking(dma_chan);
+
 			dma_bi = 0; // reset buffer index
-			volatile bool isInitialLoad = false;
+			volatile bool isInitialLoad = true;
 
 			do {
 				// next_word = rom_read(last_addr, &isInitialRead);
 				if (dma_bi == 0) {
 					dma_channel_wait_for_finish_blocking(dma_chan);
-					next_word = dmaBuffer[1];
+					next_word = (uint16_t)dmaBuffer[1];
 					dma_bi++;
-				} else if (dma_bi == 1) {
-					// dma_channel_wait_for_finish_blocking(dma_chan);
-					next_word = dmaBuffer[0];
 
-					dma_channel_set_read_addr(dma_chan, ptr16+(3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)), false); // increment the ptr for this channel too
-					dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+					dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+				} else if (dma_bi == 1) {
+					next_word = (uint16_t)dmaBuffer[0];
 					dma_bi++;
 				} else if (dma_bi == 2) {
-					dma_channel_wait_for_finish_blocking(dma_chan_high);
-					next_word = dmaBufferHigh[1];
+					dma_channel_wait_for_finish_blocking(dma_chan);
+					next_word = (uint16_t)dmaBuffer[3];
+
+					dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
 					dma_bi++;
 				} else if (dma_bi == 3) {
-					// dma_channel_wait_for_finish_blocking(dma_chan_high);
-					next_word = dmaBufferHigh[0];
-
-					dma_channel_set_read_addr(dma_chan_high, ptr16+(3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)), false); // increment the ptr for this channel too
-					dma_channel_set_write_addr(dma_chan_high, &dmaBufferHigh[0], true); // start load of next word but at position 0, so we wrap our buffer around
+					next_word = (uint16_t)dmaBuffer[2];
 					dma_bi = 0;
 				}
 
