@@ -85,28 +85,30 @@ uint32_t g_addressModifierTable[] = {
 };
 volatile uint32_t tempChip = 0;
 inline uint16_t rom_read(uint32_t rom_address) {
-	uint16_t next_word = ptr16[(((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
-	// if (dma_bi == 0) {
-	// 	dma_channel_wait_for_finish_blocking(dma_chan);
-	// 	next_word = (uint16_t)dmaBuffer[1];
+	uint16_t next_word = 0;
+	if (dma_bi == 0) {
+		dma_channel_wait_for_finish_blocking(dma_chan);
+		next_word = dmaBuffer[1];
 
-	// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-	// 	dma_bi++;
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], false);
+		dma_channel_start(dma_chan);
+		dma_bi++;
 
-	// } else if (dma_bi == 1) {
-	// 	next_word = (uint16_t)dmaBuffer[0];
-	// 	dma_bi++;
+	} else if (dma_bi == 1) {
+		next_word = dmaBuffer[0];
+		dma_bi++;
 
-	// } else if (dma_bi == 2) {
-	// 	dma_channel_wait_for_finish_blocking(dma_chan);
-	// 	next_word = (uint16_t)dmaBuffer[3];
-	// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
-	// 	dma_bi++;
+	} else if (dma_bi == 2) {
+		dma_channel_wait_for_finish_blocking(dma_chan);
+		next_word = dmaBuffer[3];
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], false);
+		dma_channel_start(dma_chan);
+		dma_bi++;
 
-	// } else if (dma_bi == 3) {
-	// 	next_word = (uint16_t)dmaBuffer[2];
-	// 	dma_bi = 0;
-	// }
+	} else if (dma_bi == 3) {
+		next_word = dmaBuffer[2];
+		dma_bi = 0;
+	}
 
 	return next_word;
 }
@@ -169,7 +171,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	channel_config_set_bswap(&c, true);
 	channel_config_set_high_priority(&c, true);
 
-	dmaBuffer = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
+	dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
 
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
@@ -272,8 +274,11 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			last_addr += 2;
 
 			// Pre-fetch
-			// dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];//rom_read(last_addr);
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_start(dma_chan);
+			dma_channel_wait_for_finish_blocking(dma_chan);
+			next_word = rom_read(last_addr);
+			// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];//rom_read(last_addr);
 			
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
@@ -325,17 +330,19 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			}
 
 			// Set the correct read address
-			// dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
 		
 
 			// Pre-load the buffer with first 32bits
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], false);
+			dma_channel_start(dma_chan);
+			dma_channel_wait_for_finish_blocking(dma_chan);
 
 			dma_bi = 0; // reset buffer index
 
 			do {
-				next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];//rom_read(last_addr);
+				//ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
+				next_word = rom_read(last_addr);
 				// if (dma_bi == 0) {
 				// 	dma_channel_wait_for_finish_blocking(dma_chan);
 				// 	next_word = (uint16_t)dmaBuffer[1];
@@ -364,8 +371,8 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					// READ
  handle_d1a2_read:
 					// pio_sm_put(pio, 0, swap8(next_word));
-					pio->txf[0] = swap8(next_word);
-					// pio->txf[0] = next_word;
+					// pio->txf[0] = swap8(next_word); // if using the pointer method
+					pio->txf[0] = next_word; // if using dma since we have byte swap enabled
 					last_addr += 2;
 				} else if (addr & 0x00000001) {
 					// WRITE
