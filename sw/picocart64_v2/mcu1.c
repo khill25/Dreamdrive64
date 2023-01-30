@@ -218,8 +218,9 @@ void testReadRomData() {
     dma_channel_config c = dma_channel_get_default_config(chan);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
-    channel_config_set_write_increment(&c, false);
+    channel_config_set_write_increment(&c, true);
 	channel_config_set_bswap(&c, true);
+	channel_config_set_ring(&c, true, 2);
 
 	dmaBuffer = malloc(4); // 4 bytes
 
@@ -363,8 +364,6 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			startJoybus = false;
 			// enable_joybus();
 		}
-
-		process_log_buffer();
 
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds

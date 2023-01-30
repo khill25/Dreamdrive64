@@ -115,7 +115,10 @@ void main_task_entry(__unused void *params)
 	qspi_oeover_disable();
 
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
-
+	// load_new_rom("Donkey Kong 64 (U) [!].z64");
+	// load_new_rom("Legend of Zelda, The - Majora's Mask (U) [!].z64");
+	// load_new_rom("Perfect Dark (U) (V1.1) [!].z64");
+	
 	vTaskDelay(100);
 	printf("Booting MCU1...\n");
 	gpio_put(PIN_MCU1_RUN, 1);

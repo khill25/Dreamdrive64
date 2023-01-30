@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2022 Kaili Hill
  */
 
 #include "n64_pi.h"
@@ -50,6 +51,7 @@ volatile int g_currentMemoryArrayChip = 3;
 volatile uint32_t address_modifier = 0;
 volatile bool g_loadRomFromMemoryArray = false;
 static uint n64_pi_pio_offset;
+volatile uint32_t tempChip = 0;
 
 volatile uint16_t *ptr16 = (volatile uint16_t *)0x13000000; // no cache
 volatile int dma_chan = -1;
@@ -83,36 +85,6 @@ uint32_t g_addressModifierTable[] = {
 	PSRAM_ADDRESS_MODIFIER_4,
 	PSRAM_ADDRESS_MODIFIER_5
 };
-volatile uint32_t tempChip = 0;
-inline uint16_t rom_read(uint32_t rom_address) {
-	uint16_t next_word = 0;
-	if (dma_bi == 0) {
-		next_word = dmaBuffer[1];
-		dma_bi++;
-
-	} else if (dma_bi == 1) {
-		next_word = dmaBuffer[0];
-		dma_bi++;
-
-		dma_channel_wait_for_finish_blocking(dma_chan);
-		dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-
-	} else if (dma_bi == 2) {
-		next_word = dmaBufferHigh[1];
-		dma_bi++;
-
-	} else if (dma_bi == 3) {
-		next_word = dmaBufferHigh[0];
-		dma_bi = 0;
-
-		dma_channel_wait_for_finish_blocking(dma_chan);
-		dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-		dma_channel_set_write_addr(dma_chan, &dmaBufferHigh[0], true);
-	}
-
-	return next_word;
-}
 
 void restart_n64_pi_pio() {
 	PIO pio = pio0;
@@ -216,13 +188,8 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	while (1 && !g_restart_pi_handler) {
 		// addr must not be a WRITE or READ request here,
 		// it should contain a 16-bit aligned address.
-		// Assert drains performance, uncomment when debugging.
-		// ASSERT((addr != 0) && ((addr & 1) == 0));
-
-		// We got a start address
+		// Address aquired
 		last_addr = addr;
-		// add_log_to_buffer(last_addr);
-		// add_log_to_buffer(last_addr);
 
 		// Handle access based on memory region
 		// Note that the if-cases are ordered in priority from
@@ -262,7 +229,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
-			// next_word = 0x2040; 
+			// next_word = 0x2040;
 			next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
@@ -276,6 +243,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			dma_channel_wait_for_finish_blocking(dma_chan);
 			next_word = dmaBuffer[0];
 			dma_channel_start(dma_chan);
+			// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
 			
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
@@ -330,21 +298,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
 			dma_channel_start(dma_chan);
 			dma_bi = 0; // reset buffer index
-
+			
 			do {	
-				// if (dma_bi == 0) {
-					dma_channel_wait_for_finish_blocking(dma_chan);
-					next_word = dmaBuffer[0];
-					dma_channel_start(dma_chan);
-					// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-
-					// dma_bi = 0;
-					
-				// } else if (dma_bi == 1) {
-				// 	next_word = dmaBuffer[0]; 
-				// 	dma_bi = 0;
-				// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-				// } 
+				
+				// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
+				dma_channel_wait_for_finish_blocking(dma_chan);
+				next_word = dmaBuffer[0];
+				dma_channel_start(dma_chan);
 
 				addr = pio_sm_get_blocking(pio, 0);
 

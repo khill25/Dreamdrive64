@@ -273,7 +273,7 @@ void load_new_rom(char* filename) {
         psram_set_cs(START_ROM_LOAD_CHIP_INDEX+o); // Use the PSRAM chip
         program_flash_enter_cmd_xip(true);
 
-        printf("\n\nCheck data from U%u...\n", START_ROM_LOAD_CHIP_INDEX + o);
+        // printf("\n\nCheck data from U%u...\n", START_ROM_LOAD_CHIP_INDEX + o);
         volatile uint32_t *ptr = (volatile uint32_t *)0x13000000;
         uint32_t cycleCountStart = 0;
         uint32_t totalTime = 0;
@@ -302,17 +302,14 @@ void load_new_rom(char* filename) {
     #if DEBUG_MCU2_PRINT == 1
     uint32_t startTime_us = time_us_32();
     int o = 0;
-    for (int i = 0; i < 128; i++) {
+    for (int i = 0; i < 64; i++) {
         volatile uint32_t word = testReadBuf[i];
         if (i % 16 == 0) { 
             printf("Chip %d\n", o + START_ROM_LOAD_CHIP_INDEX);
-        }
-        printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
-
-        if (i % 16 == 0) {
             printf("\n128 32bit reads @ 0x13000000 reads took %u us\n", totalReadTime[o]);
             o++;
         }
+        printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
     }
     
     #endif

@@ -11,7 +11,7 @@
 
 #include "pio_uart/pio_uart.h"
 
-volatile uint16_t eeprom_type = EEPROM_TYPE_4K; // default to 4K eeprom
+volatile uint16_t eeprom_type = EEPROM_TYPE_16K; // default to 4K eeprom
 volatile uint8_t eeprom[2048]; // sized to fit the 16K eeprom
 
 #define COMMAND_START    0xDE
@@ -138,7 +138,7 @@ void __time_critical_func(processJoybus)(int dataPin) {
                 //     printf("%02x ", eeprom[i]);
                 // }
                 // Save eeprom to sd card
-                sendEepromData();
+                // sendEepromData();
             }
             continue; // don't process loop
         } else {
