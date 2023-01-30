@@ -115,6 +115,7 @@ void main_task_entry(__unused void *params)
 	qspi_oeover_disable();
 
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
+	// load_new_rom("savetest.z64");
 
 	vTaskDelay(100);
 	printf("Booting MCU1...\n");
@@ -214,9 +215,9 @@ void mcu2_main(void)
 {
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
-	// const int freq_khz = 200000;
+	const int freq_khz = 200000;
 	// const int freq_khz = 250000;
-	const int freq_khz = 266000;
+	// const int freq_khz = 266000;
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
 
