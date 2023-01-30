@@ -162,14 +162,14 @@ void testReadRomData() {
 	int psram_csToggleTime = 0;
 	int total_memoryAccessTime = 0;
 	int totalReadTime = 0;
-	uint32_t endTimeBuffer[128] = {0};
-	uint32_t startTimeBuffer[128] = {0};
+	uint32_t endTimeBuffer[512] = {0};
+	uint32_t startTimeBuffer[512] = {0};
 	systick_hw->csr = 0x5;
     systick_hw->rvr = 0x00FFFFFF;
 
 	// while(1) {
 
-	for (int o = 0; o < 512; o++) {
+	for (int o = 0; o < 256; o++) {
 		uint32_t modifiedAddress = o;
 		uint32_t startTime_us = time_us_32();
 		startTimeBuffer[o] = systick_hw->cvr;
@@ -186,7 +186,7 @@ void testReadRomData() {
 	// 	sleep_ms(500);
 	// }
 
-	printf("512 16bit (1024 bytes) reads %d us\n\n\n", totalReadTime);
+	printf("256 16bit (512 bytes) reads %d us\n\n\n", totalReadTime);
 
 	// uint32_t worst = 0;
 	// uint32_t best = UINT32_MAX;
@@ -214,21 +214,14 @@ void testReadRomData() {
 	// printf("Best: %uns, worst: %uns, average: %uns\n", (uint32_t)(best * 3.76), (uint32_t)(worst * 3.76), (uint32_t)((totalCycles / 128) * 3.76));
 
 	uint16_t *rxbuf = malloc(128*2);
-	// Get a free channel, panic() if there are none
     int chan = dma_claim_unused_channel(true);
-	// int dma_chan = chan;
-
-    // 8 bit transfers. Both read and write address increment after each
-    // transfer (each pointing to a location in src or dst respectively).
-    // No DREQ is selected, so the DMA transfers as fast as it can.
-
     dma_channel_config c = dma_channel_get_default_config(chan);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
     channel_config_set_write_increment(&c, false);
 	channel_config_set_bswap(&c, true);
 
-	dmaBuffer = malloc(sizeof(uint32_t) * 2);
+	dmaBuffer = malloc(4); // 4 bytes
 
     dma_channel_configure(
         chan,          // Channel to be configured
@@ -239,44 +232,107 @@ void testReadRomData() {
         false           
     );
 
-	// Preload a few bytes
-	dma_channel_start(chan);
+	volatile uint16_t* dmaBufferHigh = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
+	// int dma_chan_high = dma_claim_unused_channel(true);
+	// dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
+	// channel_config_set_transfer_data_size(&c_high, DMA_SIZE_32);
+	// channel_config_set_read_increment(&c_high, false);
+	// channel_config_set_write_increment(&c_high, false);
+	// channel_config_set_bswap(&c_high, true);
 
+	// dma_channel_configure(
+	// 	dma_chan_high,        // Channel to be configured
+	// 	&c_high,              // The configuration we just created
+	// 	dmaBufferHigh,    // The initial write address //&pio0->txf[0]
+	// 	ptr+2,           // The initial read address
+	// 	1, 				 // Number of transfers;
+	// 	false           
+	// );
+
+	// channel_config_set_chain_to(&c, dma_chan_high);
+
+	// Preload a few bytes
+	systick_hw->csr = 0x5;
+	systick_hw->rvr = 0x00FFFFFF;
+	startTimeBuffer[0] = systick_hw->cvr;
+	dma_channel_start(chan);
+	
+	endTimeBuffer[0] = systick_hw->cvr;
+
+	volatile uint32_t next_word = 0;
 	uint32_t startTime_us = time_us_32();
-	for (int i = 0; i < 512; i++) {
+	for (int i = 0; i < 256; i++) {
 		// rxbuf[i] = rom_read_test(chan);		
+		if (i < 256) {
+			systick_hw->csr = 0x5;
+			systick_hw->rvr = 0x00FFFFFF;
+			startTimeBuffer[i+1] = systick_hw->cvr;
+		}
 
 		if (dma_bi == 0) {
 			dma_channel_wait_for_finish_blocking(chan);
-			rxbuf[i] = (uint16_t)dmaBuffer[1];
-			dma_channel_set_write_addr(chan, &dmaBuffer[2], true);
-			// dma_channel_start(chan);
+			next_word = dmaBuffer[1];
 			dma_bi++;
 
 		} else if (dma_bi == 1) {
-			rxbuf[i] = (uint16_t)dmaBuffer[0];
-			dma_bi++;
-
-		} else if (dma_bi == 2) {
-			dma_channel_wait_for_finish_blocking(chan);
-			rxbuf[i] = (uint16_t)dmaBuffer[3];
-			dma_channel_set_write_addr(chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
-			dma_bi++;
-
-		} else if (dma_bi == 3) {
-			rxbuf[i] = (uint16_t)dmaBuffer[2];
+			next_word = dmaBuffer[0];
 			dma_bi = 0;
-		}
 
+			dma_channel_start(chan);
+		} 
+		// else if (dma_bi == 2) {
+		// 	dma_channel_wait_for_finish_blocking(dma_chan_high);
+		// 	next_word = dmaBufferHigh[1];
+		// 	dma_bi++;
+
+		// } else if (dma_bi == 3) {
+		// 	next_word = dmaBufferHigh[0];
+		// 	dma_bi = 0;
+		// 	dma_channel_set_read_addr(dma_chan_high, ptr + i + 3, true);
+		// }
+
+		if (i < 256) {
+			endTimeBuffer[i+1] = systick_hw->cvr;
+			rxbuf[i] = next_word;
+		}
 	}
 	uint32_t totalTime_us = time_us_32() - startTime_us;
 
 	for (int i = 0; i < 32; i+=2) {
 		printf("%04x %04x\n", rxbuf[i], rxbuf[i+1]);
 	}
-	printf("DMA 256 32bit values (1024 bytes) %uus\n", totalTime_us);
+	printf("DMA (8*1024) 16bit reads total (8k bytes) %uus\n", totalTime_us);
 
 	dma_channel_unclaim(chan);
+	// dma_channel_unclaim(dma_chan_high);
+
+	uint32_t worst = 0;
+	uint32_t best = UINT32_MAX;
+	uint64_t totalCycles = 0;
+	for (int i = 1; i < 257; i++) {
+		uint32_t cycles = 0;
+		if (startTimeBuffer[i] > endTimeBuffer[i]) {
+			cycles = startTimeBuffer[i] - endTimeBuffer[i];
+		} else {
+			cycles = endTimeBuffer[i] - startTimeBuffer[i];
+		}
+		
+		if (cycles > worst) {
+			worst = cycles;
+		}
+		if (cycles < best) {
+			best = cycles;
+		}
+		
+		totalCycles += (uint64_t)cycles;
+		// printf("%u\n", cycles);
+	}
+
+	uint32_t startupTime = startTimeBuffer[0] - endTimeBuffer[0];
+	printf("Best: %u, worst: %u, average: %u\n", best, worst, (uint32_t)(totalCycles / 256));
+	printf("Best: %uns, worst: %uns, average: %uns\n", (uint32_t)(best * 3.76), (uint32_t)(worst * 3.76), (uint32_t)((totalCycles / 256) * 3.76));
+	printf("Startup: %u | %u, %u\n", startupTime, startTimeBuffer[0], endTimeBuffer[0]);
+
 }
 
 uint32_t last_rom_cache_update_address = 0;

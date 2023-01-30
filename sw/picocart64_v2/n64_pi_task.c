@@ -170,50 +170,44 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	channel_config_set_read_increment(&c, true);
 	channel_config_set_write_increment(&c, false);
 	channel_config_set_bswap(&c, true);
-	channel_config_set_high_priority(&c, true);
+	// channel_config_set_high_priority(&c, true);
 
 	dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
-
-	volatile uint16_t next_word;
-
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
 		&c,              // The configuration we just created
-		&next_word,//dmaBuffer,    // The initial write address //&pio0->txf[0]
+		dmaBuffer,    // The initial write address //&pio0->txf[0]
 		ptr16,           // The initial read address
 		1, 				 // Number of transfers;
 		false           
 	);
 
 	dmaBufferHigh = malloc(sizeof(uint32_t) * 2); // 4 16 bit values
-	// dma_chan_high = dma_claim_unused_channel(true);
-	// dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
-	// channel_config_set_transfer_data_size(&c_high, DMA_SIZE_32);
-	// channel_config_set_read_increment(&c_high, true);
-	// channel_config_set_write_increment(&c_high, false);
-	// channel_config_set_bswap(&c_high, true);
+	dma_chan_high = dma_claim_unused_channel(true);
+	dma_channel_config c_high = dma_channel_get_default_config(dma_chan_high);
+	channel_config_set_transfer_data_size(&c_high, DMA_SIZE_16);
+	channel_config_set_read_increment(&c_high, false);
+	channel_config_set_write_increment(&c_high, false);
+	channel_config_set_bswap(&c_high, true);
 
-	// dma_channel_configure(
-	// 	dma_chan_high,        // Channel to be configured
-	// 	&c,              // The configuration we just created
-	// 	dmaBufferHigh,    // The initial write address //&pio0->txf[0]
-	// 	ptr16,           // The initial read address
-	// 	1, 				 // Number of transfers;
-	// 	false           
-	// );
-
+	dma_channel_configure(
+		dma_chan_high,        // Channel to be configured
+		&c_high,              // The configuration we just created
+		dmaBufferHigh,    // The initial write address //&pio0->txf[0]
+		ptr16+2,           // The initial read address
+		1, 				 // Number of transfers;
+		false           
+	);
 
 	// Wait for reset to be released
 	while (gpio_get(PIN_N64_COLD_RESET) == 0) {
 		tight_loop_contents(); 
 	}
 
-	// volatile uint16_t *ptr16 = (volatile uint16_t *)0x10000000;
 	volatile uint32_t last_addr;
 	volatile uint32_t addr;
+	volatile uint32_t next_word;
 	
-	
-
 	// Read addr manually before the loop
 	addr = n64_pi_get_value(pio);
 
@@ -263,13 +257,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			next_word = 0xFF40;
+			// next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			// next_word = 0x2040; 
-			// next_word = 0x1240;
+			next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
 
@@ -277,19 +271,11 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			pio_sm_put(pio, 0, next_word);
 			last_addr += 2;
 
-			// Pre-fetch 8 bytes
-			// dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-			
-			// dma_channel_set_read_addr(dma_chan, ptr16 + 2 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			// dma_channel_set_write_addr(dma_chan, &dmaBufferHigh[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-
-			// next_word = rom_read(last_addr);
-			// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];//rom_read(last_addr);
-
-			next_word = 0x0000;
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_start(dma_chan);
+			dma_channel_wait_for_finish_blocking(dma_chan);
+			next_word = dmaBuffer[0];
+			dma_channel_start(dma_chan);
 			
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
@@ -342,106 +328,32 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 			// Set the correct read address
 			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-
-			// Prefetch 8 bytes
-			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-			
-			// dma_channel_set_read_addr(dma_chan, ptr16 + 2 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			// dma_channel_set_write_addr(dma_chan, &dmaBufferHigh[0], true);
-			// dma_channel_wait_for_finish_blocking(dma_chan);
-
+			dma_channel_start(dma_chan);
 			dma_bi = 0; // reset buffer index
-			bool shouldLog = last_addr == 0x10431400;
-			uint32_t startTime_clks = 0;
-			uint32_t endTime_clks = 0;
-			int reads = 0;
-			do {
-				//ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
-				// next_word = rom_read(last_addr);
-				
 
-				if(shouldLog) {
-					systick_hw->csr = 0x5;
-					systick_hw->rvr = 0x00FFFFFF;
-					startTime_clks = systick_hw->cvr;
-				}
-
-				dma_channel_start(dma_chan);
-
+			do {	
 				// if (dma_bi == 0) {
-				// 	next_word = dmaBuffer[1];
-				// 	dma_bi++;
+					dma_channel_wait_for_finish_blocking(dma_chan);
+					next_word = dmaBuffer[0];
+					dma_channel_start(dma_chan);
+					// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
 
+					// dma_bi = 0;
+					
 				// } else if (dma_bi == 1) {
-				// 	next_word = dmaBuffer[0];
-				// 	dma_bi++;
-
-				// 	dma_channel_wait_for_finish_blocking(dma_chan);
-				// 	dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+				// 	next_word = dmaBuffer[0]; 
+				// 	dma_bi = 0;
 				// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+				// } 
 
-				// } else if (dma_bi == 2) {
-				// 	next_word = dmaBufferHigh[1];
-				// 	dma_bi++;
-
-				// } else if (dma_bi == 3) {
-				// 	next_word = dmaBufferHigh[0];
-				// 	dma_bi = 0;
-
-				// 	dma_channel_wait_for_finish_blocking(dma_chan);
-				// 	dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-				// 	dma_channel_set_write_addr(dma_chan, &dmaBufferHigh[0], true);
-				// }
-
-				// if (dma_bi == 0) {
-				// 	dma_channel_wait_for_finish_blocking(dma_chan);
-				// 	next_word = (uint16_t)dmaBuffer[1];
-
-				// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
-				// 	dma_bi++;
-
-				// } else if (dma_bi == 1) {
-				// 	next_word = (uint16_t)dmaBuffer[0];
-				// 	dma_bi++;
-
-				// } else if (dma_bi == 2) {
-				// 	dma_channel_wait_for_finish_blocking(dma_chan);
-				// 	next_word = (uint16_t)dmaBuffer[3];
-				// 	dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true); // start load of next word but at position 0, so we wrap our buffer around
-				// 	dma_bi++;
-
-				// } else if (dma_bi == 3) {
-				// 	next_word = (uint16_t)dmaBuffer[2];
-				// 	dma_bi = 0;
-				// }
-			
-				// if (shouldLog) {
-				// 	endTime_clks = systick_hw->cvr;
-				// 	add_log_to_buffer(startTime_clks - endTime_clks);
-				// 	startTime_clks = systick_hw->cvr;
-				// }
-
-				if (shouldLog) {
-					endTime_clks = systick_hw->cvr;
-					add_log_to_buffer(startTime_clks - endTime_clks);
-				}
-
-				addr = n64_pi_get_value(pio);
+				addr = pio_sm_get_blocking(pio, 0);
 
 				if (addr == 0) {
 					// READ
  handle_d1a2_read:
-					// pio_sm_put(pio, 0, swap8(next_word));
-					// pio->txf[0] = swap8(next_word); // if using the pointer method
-					pio->txf[0] = next_word; // if using dma since we have byte swap enabled
-					// pio_sm_put(pio, 0, next_word);
-
+					pio->txf[0] = next_word;
 					last_addr += 2;
-					reads++;
-					if (shouldLog) {
-						add_log_to_buffer(reads);
-					}
+
 				} else if (addr & 0x00000001) {
 					// WRITE
 					// Ignore data since we're asked to write to the ROM.
@@ -449,10 +361,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				} else {
 					// New address
 					// add_log_to_buffer(reads);
-					break;
-				}
-
-				if (g_restart_pi_handler) {
 					break;
 				}
 			} while (1);
