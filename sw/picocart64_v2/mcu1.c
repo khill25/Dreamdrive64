@@ -104,9 +104,14 @@ void process_log_buffer() {
 
 	uint32_t value = log_buffer[log_tail++];
 
-	printf("0x%08x ", value);
+	// printf("0x%08x ", value);
+	printf("%u ", value);
 	if (log_tail >= LOG_BUFFER_SIZE) {
 		log_tail = 0;
+	}
+
+	if (log_tail % 64 == 0) {
+		printf("\n");
 	}
 }
 
@@ -276,6 +281,8 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			startJoybus = false;
 			// enable_joybus();
 		}
+
+		process_log_buffer();
 
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds

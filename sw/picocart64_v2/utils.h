@@ -35,3 +35,4 @@ void assert_handler(char *file, int line, char *statement);
 #define UNLIKELY(x)  __builtin_expect ((x), 0)
 
 uint16_t rom_read(uint32_t rom_address);
+void add_log_to_buffer(uint32_t);

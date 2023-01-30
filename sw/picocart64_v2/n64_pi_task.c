@@ -87,27 +87,28 @@ volatile uint32_t tempChip = 0;
 inline uint16_t rom_read(uint32_t rom_address) {
 	uint16_t next_word = 0;
 	if (dma_bi == 0) {
-		dma_channel_wait_for_finish_blocking(dma_chan);
 		next_word = dmaBuffer[1];
-
-		dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], false);
-		dma_channel_start(dma_chan);
 		dma_bi++;
 
 	} else if (dma_bi == 1) {
 		next_word = dmaBuffer[0];
 		dma_bi++;
 
-	} else if (dma_bi == 2) {
 		dma_channel_wait_for_finish_blocking(dma_chan);
+		dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+
+	} else if (dma_bi == 2) {
 		next_word = dmaBuffer[3];
-		dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], false);
-		dma_channel_start(dma_chan);
 		dma_bi++;
 
 	} else if (dma_bi == 3) {
 		next_word = dmaBuffer[2];
 		dma_bi = 0;
+
+		dma_channel_wait_for_finish_blocking(dma_chan);
+		dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((rom_address - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+		dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
 	}
 
 	return next_word;
@@ -273,10 +274,15 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			pio_sm_put(pio, 0, next_word);
 			last_addr += 2;
 
-			// Pre-fetch
+			// Pre-fetch 8 bytes
 			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			dma_channel_start(dma_chan);
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
 			dma_channel_wait_for_finish_blocking(dma_chan);
+			
+			dma_channel_set_read_addr(dma_chan, ptr16 + 2 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+			dma_channel_wait_for_finish_blocking(dma_chan);
+
 			next_word = rom_read(last_addr);
 			// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];//rom_read(last_addr);
 			
@@ -334,15 +340,58 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		
 
 			// Pre-load the buffer with first 32bits
-			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], false);
-			dma_channel_start(dma_chan);
+			// dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], false);
+			// dma_channel_start(dma_chan);
+			// dma_channel_wait_for_finish_blocking(dma_chan);
+			// Prefetch 8 bytes
+			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+			dma_channel_wait_for_finish_blocking(dma_chan);
+			
+			dma_channel_set_read_addr(dma_chan, ptr16 + 2 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
 			dma_channel_wait_for_finish_blocking(dma_chan);
 
 			dma_bi = 0; // reset buffer index
 
 			do {
 				//ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
-				next_word = rom_read(last_addr);
+				add_log_to_buffer(dma_bi);
+				systick_hw->csr = 0x5;
+    			systick_hw->rvr = 0x00FFFFFF;
+				uint32_t startTime_clks = systick_hw->cvr;
+				// next_word = rom_read(last_addr);
+
+				if (dma_bi == 0) {
+					next_word = dmaBuffer[1];
+					dma_bi++;
+
+				} else if (dma_bi == 1) {
+					next_word = dmaBuffer[0];
+					dma_bi++;
+
+					dma_channel_wait_for_finish_blocking(dma_chan);
+					dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+					dma_channel_set_write_addr(dma_chan, &dmaBuffer[0], true);
+
+				} else if (dma_bi == 2) {
+					next_word = dmaBuffer[3];
+					dma_bi++;
+
+				} else if (dma_bi == 3) {
+					next_word = dmaBuffer[2];
+					dma_bi = 0;
+
+					dma_channel_wait_for_finish_blocking(dma_chan);
+					dma_channel_set_read_addr(dma_chan, ptr16 + 3 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+					dma_channel_set_write_addr(dma_chan, &dmaBuffer[2], true);
+				}
+
+
+				uint32_t endTime_clks = systick_hw->cvr;
+				uint32_t totalClks = startTime_clks - endTime_clks;
+				add_log_to_buffer(totalClks);
+
 				// if (dma_bi == 0) {
 				// 	dma_channel_wait_for_finish_blocking(dma_chan);
 				// 	next_word = (uint16_t)dmaBuffer[1];
