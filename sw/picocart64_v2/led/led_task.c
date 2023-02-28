@@ -4,6 +4,7 @@
  * Copyright (c) 2022 Konrad Beckmann
  */
 
+#include <pico.h>
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -19,18 +20,20 @@ void led_task_entry(__unused void *params)
 	ws2812_init(pio0, PIN_LED);
 #endif
 
-	int i = 0;
+	ws2812_write_rgb(0, 20, 0);
+	ws2812_release_pio(); // release the pio
 
-	while (true) {
-		i++;
+	// int i = 0;
+	// while (true) {
+	// 	i++;
 
-		int imax = 64;
-		int imax2 = imax / 2;
-		int ii = i % imax;
-		int v = (ii > imax2) ? (imax - ii) : ii;
+	// 	int imax = 64;
+	// 	int imax2 = imax / 2;
+	// 	int ii = i % imax;
+	// 	int v = (ii > imax2) ? (imax - ii) : ii;
 
-		ws2812_write_rgb(v, 0, 0);
+	// 	ws2812_write_rgb(v, 0, 0);
 
-		vTaskDelay(50);
-	}
+	// 	vTaskDelay(50);
+	// }
 }

@@ -109,12 +109,12 @@ static uint8_t pin_dclk;
 static uint8_t pin_dio;
 
 /* Select SEED and CHECKSUM here */
-// const unsigned char _CicSeed = CIC6102_SEED;
-const unsigned char _CicSeed = CIC6105_SEED;
+const unsigned char _CicSeed = CIC6102_SEED;
+// const unsigned char _CicSeed = CIC6105_SEED;
 
 const unsigned char _CicChecksum[] = {
-	// CIC6102_CHECKSUM
-		CIC6105_CHECKSUM
+	CIC6102_CHECKSUM
+		// CIC6105_CHECKSUM
 };
 
 /* NTSC initial RAM */

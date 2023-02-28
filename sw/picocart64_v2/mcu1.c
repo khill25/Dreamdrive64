@@ -169,18 +169,24 @@ void testReadRomData() {
 
 	// while(1) {
 
-	for (int o = 0; o < 256; o++) {
-		uint32_t modifiedAddress = o;
-		uint32_t startTime_us = time_us_32();
-		startTimeBuffer[o] = systick_hw->cvr;
-		uint16_t word16 = ptr16[modifiedAddress];
-		endTimeBuffer[o] = systick_hw->cvr;
-		totalReadTime += time_us_32() - startTime_us;
+	// for (int p = 1; p < 4; p++) {
+	// 	psram_set_cs(p);
+	// 	printf("Chip %d\n", p);
 
-		if (o < 16) { // only print the first 16 words
-			printf("[%04x]: %08x\n", o * 4, (uint16_t)swap8(word16));
-		}
-	}
+	// 	for (int o = 0; o < 256; o++) {
+	// 		uint32_t modifiedAddress = o;
+	// 		uint32_t startTime_us = time_us_32();
+	// 		startTimeBuffer[o] = systick_hw->cvr;
+	// 		uint16_t word16 = ptr16[modifiedAddress];
+	// 		endTimeBuffer[o] = systick_hw->cvr;
+	// 		totalReadTime += time_us_32() - startTime_us;
+
+	// 		if (o < 16) { // only print the first 16 words
+	// 			printf("[%04x]: %08x\n", o * 4, (uint16_t)swap8(word16));
+	// 		}
+	// 	}
+
+	// }
 
 	// 	fetched_word32 = ptr[0];
 	// 	sleep_ms(500);

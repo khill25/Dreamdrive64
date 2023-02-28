@@ -86,7 +86,7 @@ void program_flash_init_spi() {
     (void) ssi->sr;
     (void) ssi->icr;
     // Hopefully-conservative baud rate for boot and programming
-    ssi->baudr = 6;
+    ssi->baudr = 4;
     ssi->ctrlr0 =
             (SSI_CTRLR0_SPI_FRF_VALUE_STD << SSI_CTRLR0_SPI_FRF_LSB) | // Standard 1-bit SPI serial frames
             (7 << SSI_CTRLR0_DFS_32_LSB) | // 8 clocks per data frame
@@ -497,7 +497,7 @@ void inline program_flash_flush_cache() {
 
 void enterPSRAMQuadMode() {
     ssi->ssienr = 0;
-    ssi->baudr = 4;
+    ssi->baudr = 6;
     ssi->ctrlr0 =
             (SSI_CTRLR0_SPI_FRF_VALUE_QUAD << SSI_CTRLR0_SPI_FRF_LSB) |  // Quad SPI serial frames
             (31 << SSI_CTRLR0_DFS_32_LSB) |                             // 32 clocks per data frame

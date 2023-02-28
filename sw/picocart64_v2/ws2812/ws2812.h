@@ -12,3 +12,4 @@
 
 void ws2812_init(PIO pio, uint8_t gpio);
 void ws2812_write_rgb(uint8_t r, uint8_t g, uint8_t b);
+void ws2812_release_pio();

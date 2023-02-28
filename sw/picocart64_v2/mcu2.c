@@ -114,6 +114,8 @@ void main_task_entry(__unused void *params)
     ssi_hw->ssienr = 0;
 	qspi_oeover_disable();
 
+	current_mcu_enable_demux(false);
+
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
 	// load_new_rom("Donkey Kong 64 (U) [!].z64");
 	// load_new_rom("Legend of Zelda, The - Majora's Mask (U) [!].z64");
@@ -123,9 +125,9 @@ void main_task_entry(__unused void *params)
 	printf("Booting MCU1...\n");
 	gpio_put(PIN_MCU1_RUN, 1);
 
-	printf("Mounting SD Card...");
-	mount_sd();
-	printf("Finished!\n");
+	// printf("Mounting SD Card...");
+	// mount_sd();
+	// printf("Finished!\n");
 
 	// Setup PIO UART
 	// printf("Initing MCU1<->MCU2 serial bridge...");
@@ -138,6 +140,8 @@ void main_task_entry(__unused void *params)
 	// load_new_rom("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
 	// load_new_rom("Super Mario 64 (USA).z64");
+
+	printf("Starting main MCU2 loop\n");
 
 	volatile uint32_t t = 0;
 	volatile uint32_t t2 = 0;
@@ -205,7 +209,7 @@ void mcu2_core1_entry(void)
 void vLaunch(void)
 {
 	xTaskCreateStatic(main_task_entry, "Main", MAIN_TASK_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, main_task_stack, &main_task);
-	xTaskCreateStatic(led_task_entry, "LED", LED_TASK_STACK_SIZE, NULL, LED_TASK_PRIORITY, led_task_stack, &led_task);
+	// xTaskCreateStatic(led_task_entry, "LED", LED_TASK_STACK_SIZE, NULL, LED_TASK_PRIORITY, led_task_stack, &led_task);
 	// Disable the esp32 right now to avoid adding any additional variables to debug
 	//xTaskCreateStatic(esp32_task_entry, "ESP32", ESP32_TASK_STACK_SIZE, NULL, ESP32_TASK_PRIORITY, esp32_task_stack, &esp32_task);
 

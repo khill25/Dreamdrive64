@@ -46,7 +46,7 @@
 
 #define DMA_READ_CMD 0x0B
 
-volatile int g_currentMemoryArrayChip = 3;
+volatile int g_currentMemoryArrayChip = 1;
  // Used when addressing chips outside the starting one
 volatile uint32_t address_modifier = 0;
 volatile bool g_loadRomFromMemoryArray = false;
@@ -76,9 +76,7 @@ static const uint16_t *rom_file_16 = (uint16_t *) rom_chunks;
 #define PSRAM_ADDRESS_MODIFIER_5 (PSRAM_CHIP_CAPACITY_BYTES * 5) 
 #define PSRAM_ADDRESS_MODIFIER_6 (PSRAM_CHIP_CAPACITY_BYTES * 6)
 uint32_t g_addressModifierTable[] = {
-	0, // chip 1 
-	0, 
-	PSRAM_ADDRESS_MODIFIER_0, // currently psram starts at chip 3
+	PSRAM_ADDRESS_MODIFIER_0,
 	PSRAM_ADDRESS_MODIFIER_1,
 	PSRAM_ADDRESS_MODIFIER_2,
 	PSRAM_ADDRESS_MODIFIER_3,
@@ -224,13 +222,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			// next_word = 0xFF40;
+			next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			// next_word = 0x2040;
-			next_word = 0x1240;
+			// next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
 
@@ -238,12 +236,15 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			pio_sm_put(pio, 0, next_word);
 			last_addr += 2;
 
-			dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-			dma_channel_start(dma_chan);
-			dma_channel_wait_for_finish_blocking(dma_chan);
-			next_word = dmaBuffer[0];
-			dma_channel_start(dma_chan);
-			// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
+			if (g_loadRomFromMemoryArray) {
+				dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+				dma_channel_start(dma_chan);
+				dma_channel_wait_for_finish_blocking(dma_chan);
+				next_word = dmaBuffer[0];
+				dma_channel_start(dma_chan);
+			} else {
+
+			}
 			
 			// ROM patching done
 			addr = n64_pi_get_value(pio);
@@ -291,6 +292,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			if (tempChip != g_currentMemoryArrayChip) {
 				g_currentMemoryArrayChip = tempChip;
 				// Set the new chip
+				// psram_set_cs(0);
 				psram_set_cs(g_currentMemoryArrayChip);
 			}
 
