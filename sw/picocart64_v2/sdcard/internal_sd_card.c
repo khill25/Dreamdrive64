@@ -44,6 +44,7 @@
 #define COMMAND_SD_WRITE 0x77 // literally the w char
 #define COMMAND_LOAD_ROM 0x6C // literally the l char
 #define COMMAND_ROM_LOADED 0xC6 // inverse of the load rom command
+#define COMMAND_VERIFY_ROM_DATA 0xF1 // Command to check the data sent
 #define COMMAND_BACKUP_EEPROM  (0xBE)
 #define COMMAND_LOAD_BACKUP_EEPROM  (0xEB)
 #define COMMAND_SET_EEPROM_TYPE  (0xE7)
@@ -52,7 +53,7 @@
 #define DEBUG_MCU2_PRINT 1
 #define PRINT_BUFFER_AFTER_SEND 0
 #define MCU1_ECHO_RECEIVED_DATA 0
-#define MCU2_PRINT_UART 1
+#define MCU2_PRINT_UART 0
 
 int PC64_MCU_ID = -1;
 
@@ -79,6 +80,8 @@ volatile bool romLoading = false;
 volatile uint16_t eeprom_numBytesToBackup = 0;
 volatile bool start_saveEeepromData = false;
 volatile bool start_loadEeepromData = false;
+volatile bool is_verifying_rom_data_from_mcu1 = false;
+volatile uint32_t verifyDataTime = 0;
 
 void pc64_set_sd_read_sector_part(int index, uint32_t value) {
     #if SD_CARD_RX_READ_DEBUG == 1
@@ -158,6 +161,126 @@ void pc64_send_load_new_rom_command() {
     uart_tx_program_puts(sd_selected_rom_title);
 }
 
+volatile uint32_t verify_rom_data_total_bytes_to_read = PSRAM_CHIP_CAPACITY_BYTES * 8; //12 * 1024 * 1024;
+void verify_rom_data() {
+	volatile uint16_t *ptr_16 = (volatile uint16_t *)0x13000000;
+	volatile uint8_t *ptr_8 = (volatile uint8_t *)0x13000000;
+
+	for(int i = 1; i <= 8; i++) {
+		psram_set_cs(i);
+
+        uint32_t numBytesToRead = PSRAM_CHIP_CAPACITY_BYTES;//i == 1 ? PSRAM_CHIP_CAPACITY_BYTES : (4 * 1024 * 1024);
+		// Read 512 bytes of data at a time into a buffer, loop until we have read 8MB
+		// for(int k = 0; k < PSRAM_CHIP_CAPACITY_BYTES; k+=512) {
+        for(int k = 0; k < numBytesToRead; k+=512) {
+			// Command instruction
+			uart_tx_program_putc(COMMAND_START);
+    		uart_tx_program_putc(COMMAND_START2);
+			uart_tx_program_putc(COMMAND_VERIFY_ROM_DATA);
+
+            // Sending 512 bytes of data
+            uint16_t bytesToSend = 512;
+			uart_tx_program_putc(bytesToSend >> 8);
+            uart_tx_program_putc(bytesToSend);
+
+			// Read one byte from psram and send it to mcu2
+			// Read 512 bytes at a time
+			for(int j = 0; j < 256; j++) {
+				uint32_t addr = (k/2)+ j;
+
+                while (!uart_tx_program_is_writable()) {
+                    tight_loop_contents();
+                }
+
+                volatile uint16_t word = ptr_16[addr];
+				uart_tx_program_putc((char)(word));
+                uart_tx_program_putc((char)(word >> 8));
+                // sleep_us(1);
+			}
+
+            // Sleep to allow time to verify data 
+            // so mcu2 doesn't get overwhelemed?
+			sleep_ms(3);
+		}
+
+        sleep_ms(10);
+	}
+}
+
+FIL verify_data_fil;
+const char* verify_data_filename = "GoldenEye 007 (U) [!].z64";//"Resident Evil 2 (USA) (Rev 1).z64";
+void mcu2_setup_verify_rom_data() {
+    sd_card_t *pSD = sd_get_by_num(0);
+	FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+	if (FR_OK != fr) {
+		panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
+	}
+
+	printf("\n\n---- read /%s -----\n", verify_data_filename);
+
+	fr = f_open(&verify_data_fil, verify_data_filename, FA_OPEN_EXISTING | FA_READ);
+	if (FR_OK != fr && FR_EXIST != fr) {
+		panic("f_open(%s) error: %s (%d)\n", verify_data_filename, FRESULT_str(fr), fr);
+	}
+
+	FILINFO filinfo;
+	fr = f_stat(verify_data_filename, &filinfo);
+	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
+}
+
+volatile uint32_t verify_data_total = 0;
+volatile int verify_data_currentChip = START_ROM_LOAD_CHIP_INDEX;
+volatile int verify_data_whole_array_error_count = 0;
+volatile int verify_data_chipErrorCount[9] = {0};
+uint32_t verify_data_error_addresses[16] = {0};
+void mcu2_verify_sent_rom_data() {
+    FRESULT fr;
+    char buf[512];
+    int len = 0;
+
+    fr = f_read(&verify_data_fil, buf, sizeof(buf), &len);
+    uint32_t addr = verify_data_total - ((verify_data_currentChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
+    
+    volatile uint16_t* buf_16 = (volatile uint16_t*)buf;
+    volatile uint16_t *ptr_16 = (volatile uint16_t *)pc64_uart_tx_buf;
+    
+    for(int i = 0; i < len/2; i++) {
+        uint16_t word = ptr_16[i];
+        uint16_t b = buf_16[i];
+        if(b != word) {
+            verify_data_whole_array_error_count++;
+            if (verify_data_whole_array_error_count < 8) {
+                printf("[%08x]%04x != %04x\n", addr+(i*2), b, word);
+                verify_data_error_addresses[verify_data_whole_array_error_count] = addr+(i*2);
+            }
+            verify_data_chipErrorCount[verify_data_currentChip]++;
+        }
+    }
+
+    verify_data_total += len;
+
+    int newChip = psram_addr_to_chip(verify_data_total);
+    if (newChip != verify_data_currentChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
+        printf("\n");
+        if (verify_data_chipErrorCount[verify_data_currentChip] > 0) {
+            printf("[%d]x\n", verify_data_currentChip);
+        } else {
+            printf("[%d].\n", verify_data_currentChip);
+        }
+
+        verify_data_currentChip = newChip;
+    }
+
+    // If we have read the entirety of the file, print out the stats
+    if (verify_data_total >= verify_rom_data_total_bytes_to_read) {
+        uint32_t totalVerifyTime = time_us_32() - verifyDataTime;
+        for(int i = 1; i <= 8; i++) {
+            printf("%d errors on chip %d\n", verify_data_chipErrorCount[i], i);
+        }
+        printf("Found %d errors looking at all data. Took %u seconds\n\n", verify_data_whole_array_error_count, (totalVerifyTime / 1000000));
+    }
+}
+
 void load_selected_rom() {
     printf("Loading '%s'...\n", sd_selected_rom_title);
     load_new_rom(sd_selected_rom_title);
@@ -210,7 +333,6 @@ void load_new_rom(char* filename) {
     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
     current_mcu_enable_demux(true);
-    psram_set_cs(0);
     psram_set_cs(START_ROM_LOAD_CHIP_INDEX); // Use the PSRAM chip
     program_connect_internal_flash();
     program_flash_exit_xip();
@@ -267,53 +389,20 @@ void load_new_rom(char* filename) {
 	printf("---- read file done -----\n\n\n");
 
     // enter quad mode for all chips
-    // TODO use a loop and change all chips
-    // Waiting on new v2 hardware revision
-
-    printf("Enable quad mode for chips... IE Enabled=%d\n", gpio_get(18));
-
-    for(int i = 0; i < 8; i++) {
-        psram_set_cs(0);
-        psram_set_cs(START_ROM_LOAD_CHIP_INDEX + i);
+    for(int i = 1; i <= 8; i++) {
+        psram_set_cs(i);
         program_flash_do_cmd(0x35, NULL, NULL, 0);
-        printf("Chip %d quad mode enabled\n", START_ROM_LOAD_CHIP_INDEX + i);
-        sleep_ms(100);
+        sleep_ms(50);
     }
-
-    // sleep_ms(100);
-
-    // psram_set_cs(START_ROM_LOAD_CHIP_INDEX+1);
-    // program_flash_do_cmd(0x35, NULL, NULL, 0);
-
-    // printf("Chip %d quad mode enabled\n", START_ROM_LOAD_CHIP_INDEX+1);
-
-    // sleep_ms(100);
-
-    // psram_set_cs(START_ROM_LOAD_CHIP_INDEX+2);
-    // program_flash_do_cmd(0x35, NULL, NULL, 0);
-
-    // printf("Chip %d quad mode enabled\n", START_ROM_LOAD_CHIP_INDEX+2);
-
-    // sleep_ms(100);
-
-    // psram_set_cs(START_ROM_LOAD_CHIP_INDEX+3);
-    // program_flash_do_cmd(0x35, NULL, NULL, 0);
-
-    // printf("Chip %d quad mode enabled\n", START_ROM_LOAD_CHIP_INDEX+3);
-
-    // sleep_ms(100);
 
     program_flash_flush_cache();
 
     // Now enable xip and try to read
-    // uint32_t totalReadTime[8] = {0};
-    // uint32_t testReadBuf[128] = {0}; // Enough room for 16 words * 8 chips
-    for (int o = 0; o < 8; o++) {
-        psram_set_cs(0);
-        psram_set_cs(START_ROM_LOAD_CHIP_INDEX+o); // Use the PSRAM chip
+    for (int o = 1; o <= 8; o++) {
+        psram_set_cs(o); // Use the PSRAM chip
         program_flash_enter_cmd_xip(true);
 
-        printf("\n\nCheck data from U%u...\n", START_ROM_LOAD_CHIP_INDEX + o);
+        printf("\n\nCheck data from U%u...\n", o);
         volatile uint32_t *ptr = (volatile uint32_t *)0x13000000;
         uint32_t cycleCountStart = 0;
         uint32_t totalTime = 0;
@@ -544,6 +633,9 @@ void mcu2_process_rx_buffer() {
                 printf("eeprom nbtr: %u\n", command_numBytesToRead);
                 #endif
 
+            } else if (command == COMMAND_VERIFY_ROM_DATA) {
+                is_verifying_rom_data_from_mcu1 = true;
+
             } else {
                 // not supported yet
                 printf("\nUnknown command: %x\n", command);
@@ -732,3 +824,276 @@ void mount_sd(void) {
     }
     pSD->mounted = true;
 }
+
+void test_read_psram(const char* filename) {
+    char buf[512];
+    sd_card_t *pSD = sd_get_by_num(0);
+	FRESULT fr = f_mount(&pSD->fatfs, pSD->pcName, 1);
+	if (FR_OK != fr) {
+		panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
+	}
+
+	FIL fil;
+
+	printf("\n\n---- read /%s -----\n", filename);
+
+	fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ);
+	if (FR_OK != fr && FR_EXIST != fr) {
+		panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
+	}
+
+	FILINFO filinfo;
+	fr = f_stat(filename, &filinfo);
+	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
+
+    // TODO read the file header and lookup the eeprom save size
+
+    // printf("Sending eeprom type to mcu1\n");
+    // uart_tx_program_putc(COMMAND_START);
+    // uart_tx_program_putc(COMMAND_START2);
+    // uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
+    // uart_tx_program_putc(0);
+    // uart_tx_program_putc(2);
+    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
+    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
+
+    // // Busy wait for a few cycles then send eeprom data
+    // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
+
+    // load_eeprom_from_sd();
+
+    // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
+
+    current_mcu_enable_demux(true);
+    psram_set_cs(START_ROM_LOAD_CHIP_INDEX); // Use the PSRAM chip
+    program_connect_internal_flash();
+    program_flash_exit_xip();
+
+	int len = 0;
+	int total = 0;
+	uint64_t t0 = to_us_since_boot(get_absolute_time());
+    int currentPSRAMChip = START_ROM_LOAD_CHIP_INDEX;
+
+	do {
+        fr = f_read(&fil, buf, sizeof(buf), &len);
+        uint32_t addr = total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
+        program_write_buf(addr, buf, len);
+        // Write data to ALL the chips
+        // for(int i = 1; i <= 8; i++) {
+        //     psram_set_cs(i);
+        //     program_write_buf(0, buf, len);
+        // }
+		total += len;
+
+        int newChip = psram_addr_to_chip(total);
+        if (newChip != currentPSRAMChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
+            printf("Changing memory array chip. Was: %d, now: %d\n", currentPSRAMChip, newChip);
+            printf("Total bytes: %d. Bytes remaining = %ld\n", total, (filinfo.fsize - total));
+            currentPSRAMChip = newChip;
+            psram_set_cs(currentPSRAMChip); // Switch the PSRAM chip
+            // break;
+        }
+
+	} while (len > 0);
+
+	fr = f_close(&fil);
+	if (FR_OK != fr) {
+		printf("f_close error: %s (%d)\n", FRESULT_str(fr), fr);
+	}
+	printf("---- read file done -----\n\n\n");
+
+    // Set quad mode
+    for(int i = 1; i <= 8; i++) {
+        psram_set_cs(i);
+        program_flash_do_cmd(0x35, NULL, NULL, 0);
+        sleep_ms(50);    
+    }
+
+    program_flash_enter_cmd_xip(true);
+    program_flash_flush_cache();
+
+    // reopen the file
+    fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ);
+	if (FR_OK != fr && FR_EXIST != fr) {
+		panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
+	}
+    // Reset variables
+    total = 0;
+    len = 0;
+    currentPSRAMChip = START_ROM_LOAD_CHIP_INDEX;
+    psram_set_cs(currentPSRAMChip); // Switch the PSRAM chip
+
+    int whole_array_error_count = 0;
+    int chipErrorCount[9] = {0};
+    do {
+        fr = f_read(&fil, buf, sizeof(buf), &len);
+        uint32_t addr = total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
+        
+        volatile uint16_t* buf_16 = (volatile uint16_t*)buf;
+        volatile uint16_t *ptr_16 = (volatile uint16_t *)0x13000000;
+        // if (total < 1024) {
+        //     for (int i = 0; i < 256; i++) {
+        //         uint32_t a = (addr/2) + i;
+        //         uint16_t word = ptr_16[a];
+        //         uint16_t b = buf_16[i];
+        //         printf("[%08x]: %04x | %04x\n", addr+(i*2), b, word);
+        //     }
+            
+        // }
+        for(int i = 0; i < len/2; i++) {
+            uint32_t a = (addr/2) + i;
+            uint16_t word = ptr_16[a];
+            uint16_t b = buf_16[i];
+            if(b != word) {
+                whole_array_error_count++;
+                if (whole_array_error_count < 16) {
+                    printf("[%08x]%04x != %04x\n", addr+(i*2), b, word);
+                }
+                chipErrorCount[currentPSRAMChip]++;
+            }
+        }
+
+		total += len;
+
+        int newChip = psram_addr_to_chip(total);
+        if (newChip != currentPSRAMChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
+            // printf("Changing memory array chip. Was: %d, now: %d\n", currentPSRAMChip, newChip);
+            // printf("Total bytes: %d. Bytes remaining = %ld\n", total, (filinfo.fsize - total));
+            exitQuadMode();
+            sleep_ms(10);
+
+            currentPSRAMChip = newChip;
+            psram_set_cs(currentPSRAMChip); // Switch the PSRAM chip
+        }
+
+	} while (len > 0);
+    for(int i = 1; i <= 8; i++) {
+        printf("%d errors on chip %d\n", chipErrorCount[i], i);
+    }
+    printf("Found %d errors looking at all data\n\n", whole_array_error_count);
+
+    // Now turn off the hardware
+    current_mcu_enable_demux(false);
+    ssi_hw->ssienr = 0;
+    qspi_disable();
+    return;
+
+    volatile uint16_t* buf16 = (volatile uint16_t*)buf;
+    volatile uint16_t *ptr = (volatile uint16_t *)0x13000000;
+
+    // Dump the buffer
+    for(int i = 0; i < sizeof(buf)/2; i++) {
+        if (i % 16 == 0) {
+            printf("\n");
+        }
+        printf("[%d]%04x ",i, buf16[i]);
+    }
+
+    uint32_t startTestTime = time_us_32();
+    printf("TIME: %uus %ums\n", startTestTime, startTestTime/1000);
+
+    // int index1 = 0;
+    // volatile uint16_t tempCheck = 0;
+    // while(true) {
+
+    //     tempCheck = ptr[index1];
+
+    //     index1++;
+    //     if (index1 >= 1024 * 8) {
+    //         index1 = 0;
+    //     }
+    // }
+
+    // int error_count_random_test = 0;
+    // srand(time_us_32());
+    // for(int i = 0; i < 8 * 1024 * 1024; i++) {
+    //     int r = (rand() % 8) + 1;
+    //     psram_set_cs(r);
+
+    //     int addr = (rand() % 256);
+    //     if(ptr[addr] != buf16[addr]) {
+    //         error_count_random_test++;
+    //         printf("C%d ", r);
+    //     }
+    // }
+    // printf("\nFound %d errors during random read test.\n", error_count_random_test);
+
+    // Now enable xip and try to read
+    int totalErrorsFound = 0;
+    for (int o = 1; o <= 8; o++) {
+        psram_set_cs(o); // Use the PSRAM chip
+        program_flash_enter_cmd_xip(true);
+        sleep_ms(1);
+
+        printf("\n\nCheck data from U%u...\n", o);
+
+        // Do a check of the data against the buffer
+        for(int run = 0; run < 100; run++) {
+            int errors = 0;
+            for(int i = 0; i < 256; i++) {
+                uint16_t word = ptr[i];
+                if(word != buf16[i]) {
+                    // Limit the number of errors printed...
+                    // if (errors < 16) {
+                    //     printf("[%d]%04x != %04x ", i, word, buf16[i]);
+                    // }
+                    errors++;
+                }
+            }
+
+            if (errors > 0) {
+                printf("\nRun %d: Found %d errors on chip [%d]\n", run, errors, o);
+            }
+            totalErrorsFound += errors;
+        }
+        printf("\n\n");
+        
+        // for (int i = 0; i < 512; i+=2) {
+        //     volatile uint16_t word = ptr[i];
+        //     volatile uint16_t word2 = ptr[i+1];
+        //     if (i < 32) {
+        //         printf("[%08x] %04x %04x\n", i, swap8(word), swap8(word2));
+        //     }
+        // }
+
+        // exit quad mode once finished with read
+        exitQuadMode(); 
+        sleep_ms(100);
+    }
+
+    printf("\n\%d total errors reading 8 chips.\n", totalErrorsFound);
+
+    // Now turn off the hardware
+    current_mcu_enable_demux(false);
+    ssi_hw->ssienr = 0;
+    qspi_disable();
+
+    // #if DEBUG_MCU2_PRINT == 1
+    // uint32_t startTime_us = time_us_32();
+    // int o = 0;
+    // for (int i = 0; i < 128; i++) {
+    //     volatile uint32_t word = testReadBuf[i];
+    //     if (i % 16 == 0) { 
+    //         printf("Chip %d\n", o + START_ROM_LOAD_CHIP_INDEX);
+    //     }
+    //     printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
+
+    //     if (i % 16 == 0) {
+    //         printf("\n128 32bit reads @ 0x13000000 reads took %u us\n", totalReadTime[o]);
+    //         o++;
+    //     }
+    // }
+    
+    // #endif
+
+    // printf("Rom Loaded, MCU2 qspi: OFF, sending mcu1 rom loaded command\n");
+
+    // // Let MCU1 know that we are finished
+    // uart_tx_program_putc(COMMAND_START);
+    // uart_tx_program_putc(COMMAND_START2);
+    // uart_tx_program_putc(COMMAND_ROM_LOADED);
+    // // Zero bytes to read!
+    // uart_tx_program_putc(0x00);
+    // uart_tx_program_putc(0x00);
+}
+

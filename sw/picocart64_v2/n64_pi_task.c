@@ -46,7 +46,7 @@
 
 #define DMA_READ_CMD 0x0B
 
-volatile int g_currentMemoryArrayChip = 1;
+volatile int g_currentMemoryArrayChip = START_ROM_LOAD_CHIP_INDEX;
  // Used when addressing chips outside the starting one
 volatile uint32_t address_modifier = 0;
 volatile bool g_loadRomFromMemoryArray = false;
@@ -76,6 +76,8 @@ static const uint16_t *rom_file_16 = (uint16_t *) rom_chunks;
 #define PSRAM_ADDRESS_MODIFIER_5 (PSRAM_CHIP_CAPACITY_BYTES * 5) 
 #define PSRAM_ADDRESS_MODIFIER_6 (PSRAM_CHIP_CAPACITY_BYTES * 6)
 uint32_t g_addressModifierTable[] = {
+	0,
+	0,
 	PSRAM_ADDRESS_MODIFIER_0,
 	PSRAM_ADDRESS_MODIFIER_1,
 	PSRAM_ADDRESS_MODIFIER_2,
@@ -222,13 +224,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// }
 
 			// Slowest speed
-			next_word = 0xFF40;
+			// next_word = 0xFF40;
 
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			// next_word = 0x2040;
-			// next_word = 0x1240;
+			next_word = 0x1240;
 		
 			addr = n64_pi_get_value(pio);
 
@@ -292,7 +294,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			if (tempChip != g_currentMemoryArrayChip) {
 				g_currentMemoryArrayChip = tempChip;
 				// Set the new chip
-				// psram_set_cs(0);
 				psram_set_cs(g_currentMemoryArrayChip);
 			}
 
@@ -303,11 +304,10 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			
 			do {	
 				
-				// next_word = ptr16[(((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1)];
-				dma_channel_wait_for_finish_blocking(dma_chan);
+				while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
 				next_word = dmaBuffer[0];
-				dma_channel_start(dma_chan);
-
+				dma_hw->multi_channel_trigger = 1u << dma_chan; // dma_channel_start(dma_chan);
+				
 				addr = pio_sm_get_blocking(pio, 0);
 
 				if (addr == 0) {

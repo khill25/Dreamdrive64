@@ -27,7 +27,9 @@
         "errno.h": "c",
         "pins_mcu2.h": "c",
         "ssi.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "io_qspi.h": "c",
+        "compare": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

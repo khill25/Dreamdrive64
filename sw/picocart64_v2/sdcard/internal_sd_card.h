@@ -22,6 +22,8 @@ extern volatile bool startRomLoad;
 extern volatile bool romLoading;
 extern volatile bool start_saveEeepromData;
 extern volatile bool start_loadEeepromData;
+extern volatile bool is_verifying_rom_data_from_mcu1;
+extern volatile uint32_t verifyDataTime;
 
 // UART TX buffer
 extern volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
@@ -63,3 +65,9 @@ void load_new_rom(char* filename);
 
 void save_eeprom_to_sd();
 void load_eeprom_from_sd();
+
+void test_read_psram(const char* filename);
+
+void verify_rom_data(); // Used by MCU1 to send data back to MCU2 for verification
+void mcu2_setup_verify_rom_data();
+void mcu2_verify_sent_rom_data();

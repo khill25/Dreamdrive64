@@ -497,16 +497,16 @@ void inline program_flash_flush_cache() {
 
 void enterPSRAMQuadMode() {
     ssi->ssienr = 0;
-    ssi->baudr = 6;
+    ssi->baudr = 2;
     ssi->ctrlr0 =
             (SSI_CTRLR0_SPI_FRF_VALUE_QUAD << SSI_CTRLR0_SPI_FRF_LSB) |  // Quad SPI serial frames
             (31 << SSI_CTRLR0_DFS_32_LSB) |                             // 32 clocks per data frame
             (SSI_CTRLR0_TMOD_VALUE_EEPROM_READ << SSI_CTRLR0_TMOD_LSB); // Send instr + addr, receive data
     ssi->spi_ctrlr0 =
             (0xEB << SSI_SPI_CTRLR0_XIP_CMD_LSB) | 
-            (4u << SSI_SPI_CTRLR0_WAIT_CYCLES_LSB) |
+            (6u << SSI_SPI_CTRLR0_WAIT_CYCLES_LSB) |
             (SSI_SPI_CTRLR0_INST_L_VALUE_8B << SSI_SPI_CTRLR0_INST_L_LSB) |    // 
-            (8u << SSI_SPI_CTRLR0_ADDR_L_LSB) |    // 24-bit addressing for 03h commands
+            (6u << SSI_SPI_CTRLR0_ADDR_L_LSB) |    // 24-bit addressing for 03h commands
             (SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A  // Command and address both in serial format
                     << SSI_SPI_CTRLR0_TRANS_TYPE_LSB);
 
@@ -518,6 +518,17 @@ void enterPSRAMQuadMode() {
 // serial 03h read commands. The flash remains in its default serial command
 // state, so will still respond to other commands.
 void __noinline program_flash_enter_cmd_xip(bool isPSRAM) {
+
+    // for (int i = 0; i < 6; i++) {
+    //     hw_write_masked(&pads_qspi_hw->io[i],
+    //     (uint)1 << PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_LSB,
+    //     PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_BITS);
+    // }
+
+// GPIO_DRIVE_STRENGTH_2MA = 0, ///< 2 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_4MA = 1, ///< 4 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_8MA = 2, ///< 8 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_12MA = 3 ///< 12 mA nominal drive strength
 
     if (isPSRAM) {
         enterPSRAMQuadMode();
