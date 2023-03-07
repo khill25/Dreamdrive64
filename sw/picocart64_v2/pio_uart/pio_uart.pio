@@ -12,10 +12,10 @@
 
 start:
     wait 0 pin 0        ; Stall until start bit is asserted
-    set x, 7    [10]    ; Preload bit counter, then delay until halfway through
+    set x, 7    [2]    ; Preload bit counter, then delay until halfway through
 bitloop:                ; the first data bit (12 cycles incl wait, set).
     in pins, 1          ; Shift data bit into ISR
-    jmp x-- bitloop [6] ; Loop 8 times, each loop iteration is 8 cycles
+    jmp x-- bitloop ;[2] ; Loop 8 times, each loop iteration is 8 cycles
     jmp pin good_stop   ; Check stop bit (should be high)
 
     irq 4 rel           ; Either a framing error or a break. Set a sticky flag,
@@ -56,11 +56,11 @@ static inline void uart_rx_program_init(PIO pio, uint sm, uint offset, uint pin,
 ; An 8n1 UART transmit program.
 ; OUT pin 0 and side-set pin 0 are both mapped to UART TX pin.
 
-    pull       side 1 [7]  ; Assert stop bit, or stall with line in idle state
-    set x, 7   side 0 [7]  ; Preload bit counter, assert start bit for 8 clocks
+    pull       side 1 [3]  ; Assert stop bit, or stall with line in idle state
+    set x, 7   side 0 [3]  ; Preload bit counter, assert start bit for 8 clocks
 bitloop:                   ; This loop will run 8 times (8n1 UART)
     out pins, 1            ; Shift 1 bit from OSR to the first OUT pin
-    jmp x-- bitloop   [6]  ; Each loop iteration is 8 cycles.
+    jmp x-- bitloop   ;[2]  ; Each loop iteration is 8 cycles.
 
 
 % c-sdk {
@@ -93,3 +93,13 @@ static inline void uart_tx_program_init(PIO pio, uint sm, uint offset, uint pin_
     pio_sm_set_enabled(pio, sm, true);
 }
 %}
+
+; .program inter_mcu_tx
+; get_data:
+;     pull
+; send_data:
+;     out pins, 1
+;     set 0 gpio 20  ; Tell the reciever data is on the line
+
+;     wait 1 gpio 20 ; wait for signal line to go high
+

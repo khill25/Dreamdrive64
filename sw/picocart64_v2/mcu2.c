@@ -131,9 +131,9 @@ void main_task_entry(__unused void *params)
 	printf("Booting MCU1...\n");
 	gpio_put(PIN_MCU1_RUN, 1);
 
-	printf("Mounting SD Card...");
-	mount_sd();
-	printf("Finished!\n");
+	// printf("Mounting SD Card...");
+	// mount_sd();
+	// printf("Finished!\n");
 
 	// Setup PIO UART
 	printf("Initing MCU1<->MCU2 serial bridge...");
@@ -195,6 +195,11 @@ void main_task_entry(__unused void *params)
 			// 	uint32_t kBps = (uint32_t) ((float)(totalDataInLastPeriod / 1024.0f) / (float)(totalTimeOfSendData_ms / 1000.0f));
     		// 	printf("Sent %d bytes in %d ms (%d kB/s)\n", totalDataInLastPeriod, totalTimeOfSendData_ms, kBps);
 			// }
+
+			if (t2 == 2) {
+				printf("Starting inter_mcu_comms test...\n");
+				inter_mcu_comms_test();
+			}
 		}
 
 #if 0

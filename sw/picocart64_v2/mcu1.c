@@ -169,6 +169,10 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 		if(time_us_32() - t > 1000000) {
 			t = time_us_32();
 			t2++;
+			
+			if (t2 == 4) {
+				mcu1_process_rx_buffer();
+			}
 		}
 
 		if (startJoybus) {
@@ -178,6 +182,8 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// will not run once joybus is started.
 			enable_joybus(); 
 		}
+
+		
 
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds
