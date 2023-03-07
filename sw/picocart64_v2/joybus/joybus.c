@@ -200,7 +200,6 @@ void __time_critical_func(processJoybus)(int dataPin) {
             pio_sm_set_enabled(pio, 0, true);
 
             for (int i = 0; i<resultLen; i++) pio_sm_put_blocking(pio, 0, result[i]);
-
             
         }
         else {

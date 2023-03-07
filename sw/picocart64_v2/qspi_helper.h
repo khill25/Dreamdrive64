@@ -32,7 +32,7 @@
 #define QSPI_SD3_PAD   (4)
 #define QSPI_SS_PAD    (5)
 
-#define DEBUG_CS_CHIP_USE 3
+#define QSPI_QUAD_MODE_CLK_DIVIDER 4 // rp2040@266MHz = 133MHz psram clk
 
 #define LOG_BUFFER_SIZE 2048
 extern uint32_t log_buffer[LOG_BUFFER_SIZE]; // store addresses
@@ -42,38 +42,21 @@ extern volatile uint32_t update_rom_cache_for_address;
 void load_rom_cache(uint32_t startingAt);
 void update_rom_cache(uint32_t address);
 
-void dump_current_ssi_config();
-
-void qspi_print_pull(void);
-void qspi_set_pull(bool disabled, bool pullup, bool pulldown);
-void qspi_restore_to_startup_config();
-void qspi_oeover_normal(bool enable_ss);
-void qspi_oeover_disable(void);
-
-void qspi_demux_enable(bool enabled);
-
-void qspi_enter_cmd_xip(void);
-void qspi_enter_cmd_xip_with_params(uint8_t cmd, bool quad_addr, bool quad_data, int dfs, int addr_l, int waitCycles, int baudDivider);
-void qspi_init_spi(void);
-void qspi_init_qspi(bool sendQuadEnableCommand);
-void qspi_enable();
+void qspi_enable(int clk_divider);
 void qspi_disable();
-void qspi_write(uint32_t address, const uint8_t * data, uint32_t length);
-void qspi_read(uint32_t address, uint8_t * data, uint32_t length);
+void qspi_oeover_disable(); // Advanced function, generally, use qspi_disable if you are turning off the ssi hardware 
+void qspi_enable_spi(int clk_divider, int startingChipIndex);
+void qspi_enable_qspi(int startingChipIndex, int lastChipIndex);
+void qspi_enable_flash(int clk_divider);
+void qspi_init_qspi();
+void qspi_qspi_exit_quad_mode();
 
-void qspi_test(void);
+void qspi_spi_put_get(const uint8_t *tx, uint8_t *rx, size_t count, size_t rx_skip);
+void qspi_spi_do_cmd(uint8_t cmd, const uint8_t *tx, uint8_t *rx, size_t count);
+void qspi_spi_put_cmd_addr(uint8_t cmd, uint32_t addr);
+void qspi_spi_write_buf(uint32_t addr, const uint8_t* data, uint32_t len);
+void qspi_spi_read_data(uint32_t addr, uint8_t *rx, size_t count);
+void qspi_spi_wait_ready();
 
-// FLASH FUNCTIONS
-// void qspi_flash_init();
-// void qspi_flash_init_spi(); // used before issuing serial commands to flash (ie erase/write)
-
-// void qspi_flash_enable_xip();
-// void qspi_flash_enable_xip2();
-void __no_inline_not_in_flash_func(qspi_flash_bulk_read)(uint32_t cmd, uint32_t *rxbuf, uint32_t flash_offs, size_t len, uint dma_chan);
-// void qspi_flash_write(uint32_t address, uint8_t * data, uint32_t length);
-// void qspi_flash_erase_block(uint32_t address);
-// void qspi_flash_read_data(uint32_t addr, uint8_t *rx, size_t count);
-
-// // INTERNAL, don't use these unless you know what you're doing
-// void __noinline qspi_flash_put_get(const uint8_t *tx, uint8_t *rx, size_t count, size_t rx_skip);
-// void qspi_flash_do_cmd(uint8_t chip, uint8_t cmd, const uint8_t *tx, uint8_t *rx, size_t count);
+// LEGACY FUNCTION, DON'T USE
+void program_flash_enter_cmd_xip(bool isPSRAM);

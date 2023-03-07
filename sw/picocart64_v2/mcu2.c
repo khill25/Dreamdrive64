@@ -25,14 +25,12 @@
 #include "reset_reason.h"
 #include "pins_mcu2.h"
 #include "utils.h"
-#include "qspi_helper.h"
 #include "gpio_helper.h"
 
 #include "sdcard/internal_sd_card.h"
 #include "pio_uart/pio_uart.h"
 #include "psram.h"
-#include "flash_array/flash_array.h"
-#include "flash_array/program_flash_array.h"
+#include "qspi_helper.h"
 
 #include "ff.h"
 #include <string.h>
@@ -112,10 +110,9 @@ void main_task_entry(__unused void *params)
 	printf("MCU2 Main Entry\n");
 
 	// Make sure that ssi hardware is disabled before starting mcu1
-    ssi_hw->ssienr = 0;
+	// qspi_disable();
+	ssi_hw->ssienr = 0;
 	qspi_oeover_disable();
-
-	current_mcu_enable_demux(false);
 
 	// test_read_psram("Resident Evil 2 (USA) (Rev 1).z64");
 	// test_read_psram("Pokemon Stadium 2 (USA).z64");
@@ -125,18 +122,18 @@ void main_task_entry(__unused void *params)
 	// load_new_rom("Donkey Kong 64 (U) [!].z64");
 	// load_new_rom("Legend of Zelda, The - Majora's Mask (U) [!].z64");
 	// load_new_rom("Perfect Dark (U) (V1.1) [!].z64");
-	load_new_rom("Resident Evil 2 (USA) (Rev 1).z64");
+	// load_new_rom("Resident Evil 2 (USA) (Rev 1).z64");
 	// load_new_rom("Pokemon Stadium 2 (USA).z64");
 
 	// mcu2_setup_verify_rom_data(); // opens the file into some global variables
 	
-	// vTaskDelay(100);
-	// printf("Booting MCU1...\n");
-	// gpio_put(PIN_MCU1_RUN, 1);
+	vTaskDelay(100);
+	printf("Booting MCU1...\n");
+	gpio_put(PIN_MCU1_RUN, 1);
 
-	// printf("Mounting SD Card...");
-	// mount_sd();
-	// printf("Finished!\n");
+	printf("Mounting SD Card...");
+	mount_sd();
+	printf("Finished!\n");
 
 	// Setup PIO UART
 	printf("Initing MCU1<->MCU2 serial bridge...");

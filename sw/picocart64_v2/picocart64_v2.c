@@ -19,8 +19,6 @@
 
 #include "sdcard/internal_sd_card.h"
 
-#include "flash_array.h"
-
 #define PIN_ID    (26)
 #define MCU1_ID   ( 1)
 #define MCU2_ID   ( 2)
@@ -66,10 +64,7 @@ int main(void)
 	int mcu_id = gpio_get(PIN_ID) + 1;
 	PC64_MCU_ID = mcu_id;
 
-	// Copy the boot loader
-	picocart_boot2_copy();
-
-	// // Turn off SSI
+	// Turn off SSI
 	ssi_hw->ssienr = 0;
 
 	// // Disable output enable (OE) on all QSPI IO pins

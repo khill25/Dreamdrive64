@@ -29,7 +29,8 @@
         "ssi.h": "c",
         "stdio.h": "c",
         "io_qspi.h": "c",
-        "compare": "c"
+        "compare": "c",
+        "rtc.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 
