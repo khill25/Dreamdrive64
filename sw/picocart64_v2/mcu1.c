@@ -170,9 +170,9 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			t = time_us_32();
 			t2++;
 			
-			if (t2 == 4) {
-				mcu1_process_rx_buffer();
-			}
+			// if (t2 == 4) {
+			// 	mcu1_process_rx_buffer();
+			// }
 		}
 
 		if (startJoybus) {
@@ -182,8 +182,6 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// will not run once joybus is started.
 			enable_joybus(); 
 		}
-
-		
 
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds
@@ -252,6 +250,8 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					rx_uart_buffer_reset();
 					
 					pc64_send_sd_read_command();
+					break;
+
 				case CORE1_LOAD_NEW_ROM_CMD:
 					sd_is_busy = true;
 					romLoading = true;
@@ -269,6 +269,8 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					g_restart_pi_handler = true;
 
 					pc64_send_load_new_rom_command();
+
+					break;
 
 				default:
 					break;

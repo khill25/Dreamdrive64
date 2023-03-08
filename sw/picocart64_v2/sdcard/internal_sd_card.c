@@ -48,8 +48,8 @@
 
 #define DEBUG_MCU2_PRINT 1
 #define PRINT_BUFFER_AFTER_SEND 0
-#define MCU1_ECHO_RECEIVED_DATA 1
-#define MCU2_PRINT_UART 1
+#define MCU1_ECHO_RECEIVED_DATA 0
+#define MCU2_PRINT_UART 0
 
 int PC64_MCU_ID = -1;
 
@@ -435,92 +435,92 @@ void mcu1_process_rx_buffer() {
         uart_tx_program_putc(value);
         #endif
 
-        // if (romLoading) {
-        //     if (receivingData) {
-        //         // Special case to send bytes directly into the eeprom array
-        //         if (commandHeaderBuffer[0] == COMMAND_LOAD_BACKUP_EEPROM) {
-        //             eeprom[bufferIndex] = value;
-        //         } else {
-        //             ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = value;
-        //         }
+        if (romLoading) {
+            if (receivingData) {
+                // Special case to send bytes directly into the eeprom array
+                if (commandHeaderBuffer[0] == COMMAND_LOAD_BACKUP_EEPROM) {
+                    eeprom[bufferIndex] = value;
+                } else {
+                    ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = value;
+                }
 
-        //         bufferIndex++;
-        //         if (bufferIndex >= command_numBytesToRead) {
-        //             command_processBuffer = true;
-        //             bufferIndex = 0;
-        //         }
+                bufferIndex++;
+                if (bufferIndex >= command_numBytesToRead) {
+                    command_processBuffer = true;
+                    bufferIndex = 0;
+                }
                 
-        //     } else if (isReadingCommandHeader) {
-        //         commandHeaderBuffer[command_headerBufferIndex++] = value;
+            } else if (isReadingCommandHeader) {
+                commandHeaderBuffer[command_headerBufferIndex++] = value;
 
-        //         if (command_headerBufferIndex >= COMMAND_HEADER_LENGTH) {
-        //             command_numBytesToRead = (commandHeaderBuffer[1] << 8) | commandHeaderBuffer[2];
-        //             isReadingCommandHeader = false;
-        //             command_headerBufferIndex = 0;
+                if (command_headerBufferIndex >= COMMAND_HEADER_LENGTH) {
+                    command_numBytesToRead = (commandHeaderBuffer[1] << 8) | commandHeaderBuffer[2];
+                    isReadingCommandHeader = false;
+                    command_headerBufferIndex = 0;
 
-        //             // Special case for num bytes to read 0, skip right to processing command
-        //             if (command_numBytesToRead == 0) {
-        //                 command_processBuffer = true;
-        //                 bufferIndex = 0;
-        //             } else {
-        //                 receivingData = true;
-        //             }
-        //         }
-        //     } else if (value == COMMAND_START && !receivingData) {
-        //         mayHaveStart = true;
-        //     } else if (value == COMMAND_START2 && mayHaveStart && !receivingData) {
-        //         isReadingCommandHeader = true;
-        //     }
+                    // Special case for num bytes to read 0, skip right to processing command
+                    if (command_numBytesToRead == 0) {
+                        command_processBuffer = true;
+                        bufferIndex = 0;
+                    } else {
+                        receivingData = true;
+                    }
+                }
+            } else if (value == COMMAND_START && !receivingData) {
+                mayHaveStart = true;
+            } else if (value == COMMAND_START2 && mayHaveStart && !receivingData) {
+                isReadingCommandHeader = true;
+            }
 
-        //     if (command_processBuffer) {
-        //         command_processBuffer = false;
-        //         // process what was sent
-        //         uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
-        //         char command = commandHeaderBuffer[0];
+            if (command_processBuffer) {
+                command_processBuffer = false;
+                // process what was sent
+                uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
+                char command = commandHeaderBuffer[0];
 
-        //         if (command == COMMAND_SET_EEPROM_TYPE) {
-        //             eeprom_type = (buffer[0] << 8 | buffer[1]);
+                if (command == COMMAND_SET_EEPROM_TYPE) {
+                    eeprom_type = (buffer[0] << 8 | buffer[1]);
 
-        //         } else if (command == COMMAND_LOAD_BACKUP_EEPROM) {
-        //             // Already pushed these bits into the eeprom array
+                } else if (command == COMMAND_LOAD_BACKUP_EEPROM) {
+                    // Already pushed these bits into the eeprom array
 
-        //         } else if (command == COMMAND_ROM_LOADED) {
-        //             romLoading = false; // signal that the rom is finished loading
-        //             sendDataReady = true;
-        //         }
+                } else if (command == COMMAND_ROM_LOADED) {
+                    romLoading = false; // signal that the rom is finished loading
+                    sendDataReady = true;
+                }
 
-        //         // Reset state and empty the command header buffer
-        //         commandHeaderBuffer[0] = 0;
-        //         commandHeaderBuffer[1] = 0;
-        //         commandHeaderBuffer[2] = 0;
-        //         bufferIndex = 0;
-        //         mayHaveFinish = false;
-        //         mayHaveStart = false;
-        //         receivingData = false;
-        //     }
-        // } else {
-        //     // Combine two char values into a 16 bit value
-        //     // Only increment bufferIndex when adding a value
-        //     // else, store the ch into the holding field
-        //     if (bufferByteIndex % 2 == 1) {
-        //         uint16_t value16 = lastBufferValue << 8 | value;
-        //         pc64_uart_tx_buf[bufferIndex] = value16;
-        //         bufferIndex += 1;
-        //     } else {
-        //         lastBufferValue = value;
-        //     }
+                // Reset state and empty the command header buffer
+                commandHeaderBuffer[0] = 0;
+                commandHeaderBuffer[1] = 0;
+                commandHeaderBuffer[2] = 0;
+                bufferIndex = 0;
+                mayHaveFinish = false;
+                mayHaveStart = false;
+                receivingData = false;
+            }
+        } else {
+            // Combine two char values into a 16 bit value
+            // Only increment bufferIndex when adding a value
+            // else, store the ch into the holding field
+            if (bufferByteIndex % 2 == 1) {
+                uint16_t value16 = lastBufferValue << 8 | value;
+                pc64_uart_tx_buf[bufferIndex] = value16;
+                bufferIndex += 1;
+            } else {
+                lastBufferValue = value;
+            }
 
-        //     bufferByteIndex++;
+            bufferByteIndex++;
 
-        //     if (bufferByteIndex >= SD_CARD_SECTOR_SIZE) {
-        //         sendDataReady = true;
-        //         break;
-        //     }
+            if (bufferByteIndex >= SD_CARD_SECTOR_SIZE) {
+                sendDataReady = true;
+                break;
+            }
 
-        //     if (bufferByteIndex >= 512) {
-        //         sendDataReady = true;
-        //     }
-        // }
+            if (bufferByteIndex >= 512) {
+                sendDataReady = true;
+            }
+        }
     }
 }
 
@@ -532,82 +532,82 @@ void mcu2_process_rx_buffer() {
         printf("%02x ", ch);
         #endif
 
-        // if (receivingData) {
-        //     ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = ch;
-        //     bufferIndex++;
+        if (receivingData) {
+            ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = ch;
+            bufferIndex++;
 
-        //     if (bufferIndex >= command_numBytesToRead) {
-        //         command_processBuffer = true;
-        //         bufferIndex = 0;
-        //     }
-        // } else if (isReadingCommandHeader) {
-        //     commandHeaderBuffer[command_headerBufferIndex++] = ch;
+            if (bufferIndex >= command_numBytesToRead) {
+                command_processBuffer = true;
+                bufferIndex = 0;
+            }
+        } else if (isReadingCommandHeader) {
+            commandHeaderBuffer[command_headerBufferIndex++] = ch;
 
-        //     if (command_headerBufferIndex >= COMMAND_HEADER_LENGTH) {
-        //         command_numBytesToRead = (commandHeaderBuffer[1] << 8) | commandHeaderBuffer[2];
-        //         isReadingCommandHeader = false;
-        //         receivingData = true;
-        //         command_headerBufferIndex = 0;
-        //     }
+            if (command_headerBufferIndex >= COMMAND_HEADER_LENGTH) {
+                command_numBytesToRead = (commandHeaderBuffer[1] << 8) | commandHeaderBuffer[2];
+                isReadingCommandHeader = false;
+                receivingData = true;
+                command_headerBufferIndex = 0;
+            }
 
-        //     #if MCU2_PRINT_UART == 1
-        //     printf("\n");
-        //     #endif
+            #if MCU2_PRINT_UART == 1
+            printf("\n");
+            #endif
             
-        // } else if (ch == COMMAND_START && !receivingData) {
-        //     mayHaveStart = true;
-        // } else if (ch == COMMAND_START2 && mayHaveStart && !receivingData) {
-        //     isReadingCommandHeader = true;
-        // }
+        } else if (ch == COMMAND_START && !receivingData) {
+            mayHaveStart = true;
+        } else if (ch == COMMAND_START2 && mayHaveStart && !receivingData) {
+            isReadingCommandHeader = true;
+        }
 
-        // if (command_processBuffer) {
-        //     command_processBuffer = false;
-        //     // process what was sent
-        //     uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
-        //     char command = commandHeaderBuffer[0];
+        if (command_processBuffer) {
+            command_processBuffer = false;
+            // process what was sent
+            uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
+            char command = commandHeaderBuffer[0];
 
-        //     if (command == COMMAND_SD_READ) {
-        //         uint32_t sector_front =(buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
-        //         uint32_t sector_back = (buffer[4] << 24) | (buffer[5] << 16) | (buffer[6] << 8) | buffer[7];
-        //         volatile uint32_t sectorCount = (buffer[8] << 24) | (buffer[9] << 16) | (buffer[10] << 8) | buffer[11];
-        //         sectorToSendRegisters[0] = sector_front;
-        //         sectorToSendRegisters[1] = sector_back;
-        //         numSectorsToSend = 1;
-        //         sendDataReady = true;
+            if (command == COMMAND_SD_READ) {
+                uint32_t sector_front =(buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
+                uint32_t sector_back = (buffer[4] << 24) | (buffer[5] << 16) | (buffer[6] << 8) | buffer[7];
+                volatile uint32_t sectorCount = (buffer[8] << 24) | (buffer[9] << 16) | (buffer[10] << 8) | buffer[11];
+                sectorToSendRegisters[0] = sector_front;
+                sectorToSendRegisters[1] = sector_back;
+                numSectorsToSend = 1;
+                sendDataReady = true;
                 
-        //     } else if (command == COMMAND_LOAD_ROM) {
-        //         sprintf(sd_selected_rom_title, "%s", buffer);
-        //         startRomLoad = true;
-        //         #if DEBUG_MCU2_PRINT == 1
-        //         printf("nbtr: %u\n", command_numBytesToRead);
-        //         #endif
+            } else if (command == COMMAND_LOAD_ROM) {
+                sprintf(sd_selected_rom_title, "%s", buffer);
+                startRomLoad = true;
+                #if DEBUG_MCU2_PRINT == 1
+                printf("nbtr: %u\n", command_numBytesToRead);
+                #endif
 
-        //     } else if (command == COMMAND_BACKUP_EEPROM) {
-        //         eeprom_numBytesToBackup = command_numBytesToRead;
-        //         start_saveEeepromData = true;
-        //         #if DEBUG_MCU2_PRINT == 1
-        //         printf("eeprom nbtr: %u\n", command_numBytesToRead);
-        //         #endif
+            } else if (command == COMMAND_BACKUP_EEPROM) {
+                eeprom_numBytesToBackup = command_numBytesToRead;
+                start_saveEeepromData = true;
+                #if DEBUG_MCU2_PRINT == 1
+                printf("eeprom nbtr: %u\n", command_numBytesToRead);
+                #endif
 
-        //     } else if (command == COMMAND_VERIFY_ROM_DATA) {
-        //         is_verifying_rom_data_from_mcu1 = true;
+            } else if (command == COMMAND_VERIFY_ROM_DATA) {
+                is_verifying_rom_data_from_mcu1 = true;
 
-        //     } else {
-        //         // not supported yet
-        //         printf("\nUnknown command: %x\n", command);
-        //     }
+            } else {
+                // not supported yet
+                printf("\nUnknown command: %x\n", command);
+            }
 
-        //     bufferIndex = 0;
-        //     mayHaveFinish = false;
-        //     mayHaveStart = false;
-        //     receivingData = false;
-        //     command_numBytesToRead = 0;
+            bufferIndex = 0;
+            mayHaveFinish = false;
+            mayHaveStart = false;
+            receivingData = false;
+            command_numBytesToRead = 0;
 
-        //     #if MCU2_PRINT_UART == 1
-        //         echoIndex = 0;
-        //         printf("\n");
-        //     #endif
-        // } else {
+            #if MCU2_PRINT_UART == 1
+                echoIndex = 0;
+                printf("\n");
+            #endif
+        } else {
             #if MCU2_PRINT_UART == 1
             echoIndex++;
             if (echoIndex >= 32) {
@@ -615,7 +615,7 @@ void mcu2_process_rx_buffer() {
                 echoIndex = 0;
             }
             #endif
-        // }
+        }
     }
 }
 
