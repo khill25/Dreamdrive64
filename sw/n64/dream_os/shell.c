@@ -52,6 +52,8 @@ Discussion about what the menu feature set::
 #define SCREEN_WIDTH 512
 #define SCREEN_HEIGHT 240
 #define COLOR_TRANSPARENCY_ENABLED 1
+#define MAX_VISIBLE_CHARACTERS_LIST_VIEW (36) // 36 characters can fit with the current margin and spacing
+#define MAX_VISIBLE_CHARACTERS_INFO_PANE (24) // 24 characters can fit with the current margin and spacing
 
  // TODO: It is likely a directory may contain thousands of files
  // Modify the ls function to only buffer a portion of files (up to some MAX)
@@ -134,6 +136,10 @@ char* temp_spritename;
 char g_infoPanelTextBuf[300];
 // sprite_t** g_thumbnail_cache;
 
+char selection_visible_text_buffer[MAX_VISIBLE_CHARACTERS_LIST_VIEW]; // used to scroll long text
+char* aButtonActionText = "Load ROM";
+char* bButtonActionText = "Back";
+
 /* Layout */
 #define INFO_PANEL_WIDTH (192 + (MARGIN_PADDING * 2)) // NEEDS PARENS!!! Seems the compiler doesn't evaluate the define before using it for other defines
 #define FILE_PANEL_WIDTH (SCREEN_WIDTH - INFO_PANEL_WIDTH)
@@ -144,18 +150,31 @@ char g_infoPanelTextBuf[300];
 #define ROW_SELECTION_WIDTH (FILE_PANEL_WIDTH)
 #define MENU_BAR_HEIGHT (15)
 #define LIST_TOP_PADDING (MENU_BAR_HEIGHT + ROW_HEIGHT)
-#define BOTTOM_BAR_HEIGHT (32)
+#define BOTTOM_BAR_HEIGHT (24)
 #define BOTTOM_BAR_Y (SCREEN_HEIGHT - BOTTOM_BAR_HEIGHT)
 
 // Menu sprites
 sprite_t *a_button_icon;
+sprite_t *b_button_icon;
 sprite_t* spinner;
 sprite_t** animated_spinner;
+
+const color_t BERRY_COLOR = { .r = 0x82, .g = 0x00, .b = 0x2E, .a = 0x00 };
+const color_t BRIGHT_BLUE_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 };
+const color_t DC_BLUE_COLOR = { .r = 0x3F, .g = 0x90, .b = 0xCE, .a = 0x00 };
+const color_t DC_BLUE2_COLOR = { .r = 0x30, .g = 0x6D, .b = 0x9C, .a = 0x00 }; // 20% darker blue 306d9c
+
+const color_t DC_YELLOW_COLOR = { .r = 0xF9, .g = 0xB6, .b = 0x17, .a = 0x00 };
+const color_t DC_ORANGE_COLOR = { .r = 0xF3, .g = 0x73, .b = 0x23, .a = 0x00 };
+const color_t DC_ORANGE2_COLOR = { .r = 0xBF, .g = 0x5A, .b = 0x1B, .a = 0x00 };
+//20% darker orange bf5a1b
+const color_t DC_GREEN_COLOR = { .r = 0x66, .g = 0xB3, .b = 0x2E, .a = 0x00 };
+
 /* Colors */
-color_t MENU_BAR_COLOR = { .r = 0x82, .g = 0x00, .b = 0x2E, .a = 0x00 }; // 0x82002E, Berry
-color_t BOTTOM_BAR_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x55 }; // 0x82002E, Berry
-color_t SELECTION_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
-color_t LOADING_BOX_COLOR = { .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
+color_t MENU_BAR_COLOR = DC_BLUE2_COLOR;//{ .r = 0x82, .g = 0x00, .b = 0x2E, .a = 0x00 }; // 0x82002E, Berry
+color_t BOTTOM_BAR_COLOR = DC_ORANGE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x55 }; // 0x82002E, Berry
+color_t SELECTION_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
+color_t LOADING_BOX_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
 color_t WHITE_COLOR = { .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0x00 }; // 0xCCCCCC, White
 
 void loadRomAtSelection(int selection) {
@@ -316,6 +335,55 @@ static int calculate_num_rows_per_page(void) {
     return rows;
 }
 
+// TODO create a reusable animating scrolling text function
+static bool current_calculate_scroll_item_needs_scroll = true;
+static int calculated_last_selected_item_index = -1;
+static int selection_visible_start_char_index = -1; // which character to draw the string from
+static int calculate_current_selection_method_called = 0; // how many times the method has been called, for animating
+static int g_numCallsDelayBeforeScrollingStarts = 30;
+static int g_numCallsPerFrameOfCalculateCurrentTextScroll = 3;
+static void calculate_current_selection_visible_text(int currently_selected) {
+    // New item
+    if (currently_selected != calculated_last_selected_item_index) {
+        calculate_current_selection_method_called = 0;
+        calculated_last_selected_item_index = currently_selected;
+        selection_visible_start_char_index = 0;
+        strncpy(selection_visible_text_buffer, &(g_current_dir_entries[currently_selected]->filename)[selection_visible_start_char_index], MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+
+        current_calculate_scroll_item_needs_scroll = (strlen(g_current_dir_entries[currently_selected]->filename) > MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+    }
+
+    // Only need to calculate if there is text to scroll
+    if (!current_calculate_scroll_item_needs_scroll) {
+        return;
+    }
+
+    if (
+        (selection_visible_start_char_index != 0 && calculate_current_selection_method_called > g_numCallsPerFrameOfCalculateCurrentTextScroll) || 
+        (selection_visible_start_char_index == 0 && calculate_current_selection_method_called > g_numCallsDelayBeforeScrollingStarts)
+    ) {
+        calculate_current_selection_method_called = 0;
+        selection_visible_start_char_index++;
+        int selection_text_length = strlen(g_current_dir_entries[currently_selected]->filename);
+        if (selection_visible_start_char_index >= selection_text_length) {
+            selection_visible_start_char_index = 0;
+        }
+
+        // Only need to copy if the text is going to change
+        int charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
+        if ((selection_text_length - selection_visible_start_char_index) > MAX_VISIBLE_CHARACTERS_LIST_VIEW) {
+            charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
+        } else {
+            charsToCopy = selection_text_length - selection_visible_start_char_index;
+        }
+
+        strncpy(selection_visible_text_buffer, &(g_current_dir_entries[currently_selected]->filename)[selection_visible_start_char_index], charsToCopy);
+        selection_visible_text_buffer[charsToCopy] = '\0';
+    }
+
+    calculate_current_selection_method_called++;
+}
+
 /*
  * Render a list of strings and show a caret on the currently selected row
  */
@@ -326,6 +394,11 @@ static void render_list(display_context_t display, int currently_selected, int f
 	if (first_visible > 0) {
 		graphics_draw_text(display, MARGIN_PADDING, MENU_BAR_HEIGHT, "...");
 	}
+
+    // Current screen mode allows 36 characters until the right menu
+    // graphics_draw_text(display, MARGIN_PADDING, MENU_BAR_HEIGHT, "00000000010000000002000000000300000000040000000005");
+
+    calculate_current_selection_visible_text(currently_selected);
 
 	for (int i = 0; i < max_on_screen; i++) {
 		int row = first_visible + i;
@@ -340,12 +413,27 @@ static void render_list(display_context_t display, int currently_selected, int f
 		if (currently_selected == row) {
 			/* Render selection box */
 			graphics_draw_box(display, 0, y - 2, ROW_SELECTION_WIDTH, 10, graphics_convert_color(SELECTION_COLOR));
+
+            // Render the list item
+		    graphics_draw_text(display, x, y, selection_visible_text_buffer);
 		} else {
 			x += MARGIN_PADDING;
+            
+            // Render the list item. If it is too long, clip it
+            if (strlen(g_current_dir_entries[row]->filename) > MAX_VISIBLE_CHARACTERS_LIST_VIEW) {
+                // TODO this isn't super efficient. Should keep a cache of displayable strings so we only need to truncate
+                // when they are added the cache rather than every frame
+                char* temp_display_item[MAX_VISIBLE_CHARACTERS_LIST_VIEW];
+                memset(temp_display_item, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+                strncpy(temp_display_item, g_current_dir_entries[row]->filename, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+                // Draw the temp item
+                graphics_draw_text(display, x, y, temp_display_item);
+            } else {
+		        graphics_draw_text(display, x, y, g_current_dir_entries[row]->filename);
+            }
 		}
 
-		// Render the list item
-		graphics_draw_text(display, x, y, g_current_dir_entries[row]->filename);
+		
 
 		/* If this is the last row and there are more files below, draw an indicator */
 		if (row + 1 < NUM_ENTRIES && i + 1 >= max_on_screen) {
@@ -358,6 +446,7 @@ static void render_list(display_context_t display, int currently_selected, int f
     graphics_draw_line(display, x0+1, y0, x1+1, y1, graphics_convert_color(MENU_BAR_COLOR));
 }
 
+char* info_panel_temp_visible_title[MAX_VISIBLE_CHARACTERS_INFO_PANE];
 static void render_info_panel(display_context_t display, int currently_selected) {
     /*
     Discussion about things to display:
@@ -383,8 +472,16 @@ static void render_info_panel(display_context_t display, int currently_selected)
             LOAD_BOX_ART = true;
         }
 
+        // Truncate the title text
+        memset(info_panel_temp_visible_title, 0, MAX_VISIBLE_CHARACTERS_INFO_PANE);
+        int charsToCopy = MAX_VISIBLE_CHARACTERS_INFO_PANE - strlen(g_current_dir_entries[currently_selected]->filename);
+        if (charsToCopy < 0) {
+            charsToCopy = MAX_VISIBLE_CHARACTERS_INFO_PANE - charsToCopy;
+        }
+        strncpy(info_panel_temp_visible_title, g_current_dir_entries[currently_selected]->filename, MAX_VISIBLE_CHARACTERS_INFO_PANE);
+
         // TODO if part of the string is longer than the number of characters that can fit in in the info panel width, split or clip it
-        sprintf(g_infoPanelTextBuf, "%s\n%s\nSize: ?M\nCountry xxx\nReleased xxxx", g_current_dir_entries[currently_selected]->filename, temp_serial);
+        sprintf(g_infoPanelTextBuf, "%s\n%s\nSize: ?M\nCountry xxx\nReleased xxxx", info_panel_temp_visible_title, temp_serial);
         if (!g_isRenderingMenu) {
             printf("rom: %s, serial: %s\n",g_current_dir_entries[currently_selected]->filename, temp_serial);
         }
@@ -416,14 +513,22 @@ static void draw_header_bar(display_context_t display, const char* headerText) {
 
 static void draw_bottom_bar(display_context_t display) {
     // NOTE: Transparency only works if color mode is set to 32bit
-    #if COLOR_TRANSPARENCY_ENABLED == 1
-    graphics_draw_box_trans(display, 0, BOTTOM_BAR_Y, SCREEN_WIDTH - INFO_PANEL_WIDTH, BOTTOM_BAR_HEIGHT, graphics_convert_color(BOTTOM_BAR_COLOR));
-    #else
+    //#if COLOR_TRANSPARENCY_ENABLED == 1
+    //graphics_draw_box_trans(display, 0, BOTTOM_BAR_Y, SCREEN_WIDTH - INFO_PANEL_WIDTH, BOTTOM_BAR_HEIGHT, graphics_convert_color(BOTTOM_BAR_COLOR));
+    //#else
     graphics_draw_box(display, 0, BOTTOM_BAR_Y, SCREEN_WIDTH - INFO_PANEL_WIDTH, BOTTOM_BAR_HEIGHT, graphics_convert_color(BOTTOM_BAR_COLOR));
-    #endif
+    //#endif
     
-    // graphics_draw_sprite_trans(display, MARGIN_PADDING, BOTTOM_BAR_Y, a_button_icon);
-    graphics_draw_text(display, MARGIN_PADDING + 32, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Load ROM");
+    int x = MARGIN_PADDING;
+    graphics_draw_sprite_trans(display, x, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 10, a_button_icon);
+    x += 32 + 2;
+    graphics_draw_text(display, x, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Load ROM");
+    x += 64;
+
+    x += 16;
+    graphics_draw_sprite_trans(display, x, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 10, b_button_icon);
+    x += 32 + 2;
+    graphics_draw_text(display, x, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Back");
 }
 
 // Janky lol
@@ -672,7 +777,7 @@ static void show_list(void) {
 		render_list(display, g_current_selected_list_item, g_first_visible_list_item, max_on_screen);
 
         /* Render info about the currently selected rom including box art */
-        //render_info_panel(display, g_current_selected_list_item);
+        render_info_panel(display, g_current_selected_list_item);
 
         /* A little debug text at the bottom of the screen */
         //snprintf(debugTextBuffer, 100, "g_current_selected_list_item=%d, g_first_visible_list_item=%d, max_per_page=%d", g_current_selected_list_item, g_first_visible_list_item, max_on_screen);
@@ -983,7 +1088,10 @@ int load_boxart_for_rom(char* filename) {
 static void init_sprites(void) {
     printf("init sprites\n");
 
-    // a_button_icon = read_sprite("a-button-icon.sprite");
+    a_button_icon = read_sprite("a-button-icon-squish.sprite");
+    b_button_icon = read_sprite("b-button-icon-squish.sprite");
+
+    memset(selection_visible_text_buffer, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
 
     if (IS_EMULATOR) {
         // g_thumbnail_cache = malloc(sizeof(sprite_t*) * 4); // alloc the buffer

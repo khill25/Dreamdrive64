@@ -53,7 +53,7 @@ uint8_t isUartTXRunning = false;
 uint8_t isUartRXRunning = false;
 
 void pio_uart_init(int rxPin, int txPin) {
-    uint divider = 8; // Clock divider
+    uint divider = 4; // Clock divider
 
     if (rxPin >= 0) {
 	    pioUartRXOffset = pio_add_program(uart_rx.pio, &uart_rx_program);
