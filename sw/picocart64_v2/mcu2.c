@@ -245,16 +245,22 @@ void mcu2_main(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
+	// const int freq_khz = 210000;
 	// const int freq_khz = 250000;
-	const int freq_khz = 266000;
+	// const int freq_khz = 266000;
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
+	// const int freq_khz = 332000;
+	const int freq_khz = 360000;
+	// const int freq_khz = 384000;
+	// const int freq_khz = 400000;
 
 	// IMPORTANT: For the serial comms between mcus to work properly 
 	// both mcus must be run at the same clk speed or have the pio divder set accordingly
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
+	vreg_set_voltage(VREG_VOLTAGE_1_25);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	// Init async UART on pin 0/1

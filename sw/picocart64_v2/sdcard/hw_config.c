@@ -69,11 +69,18 @@ static spi_t spis[] = {			// One for each SPI.
 static sd_card_t sd_cards[] = {	// One for each SD card
 	{
 	 .pcName = "0:",			// Name used to mount device
-	 .spi = &spis[0],			// Pointer to the SPI driving this card
-	 .ss_gpio = PIN_SD_DAT3,	// The SPI slave select GPIO for this SD card
-	 .set_drive_strength = true,
-	 .ss_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA,
+	//  .spi = &spis[0],			// Pointer to the SPI driving this card
+	//  .ss_gpio = PIN_SD_DAT3,	// The SPI slave select GPIO for this SD card
+	//  .set_drive_strength = true,
+	//  .ss_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA,
 	 //.use_card_detect = false,        
+	.type = SD_IF_SDIO,
+	.sdio_if = {
+		.CMD_gpio=PIN_SD_CMD,
+		.D0_gpio=PIN_SD_DAT0_UART1_TX,
+		.SDIO_PIO=pio0,
+		.DMA_IRQ_num=DMA_IRQ_1
+	},
 
 	 .use_card_detect = false,
 	 .card_detect_gpio = -1,	// Card detect
@@ -89,33 +96,50 @@ static sd_card_t sd_cards[] = {	// One for each SD card
 // 	spi_irq_handler(&spis[0]);
 // }
 
+/* 
+The following *get_num, *get_by_num functions are required by the library API. 
+They are how the library finds out about the configuration.
+*/
+size_t sd_get_num() { return count_of(sd_cards); }
+sd_card_t *sd_get_by_num(size_t num) {
+    if (num <= sd_get_num()) {
+        return &sd_cards[num];
+    } else {
+        return NULL;
+    }
+}
+// These need to be defined for the API even if SPI is not used:
+size_t spi_get_num() { return 0; }
+spi_t *spi_get_by_num(size_t num) { return NULL; }
+
+
 /* ********************************************************************** */
-size_t sd_get_num()
-{
-	return count_of(sd_cards);
-}
+// size_t sd_get_num()
+// {
+// 	return count_of(sd_cards);
+// }
 
-sd_card_t *sd_get_by_num(size_t num)
-{
-	if (num <= sd_get_num()) {
-		return &sd_cards[num];
-	} else {
-		return NULL;
-	}
-}
+// sd_card_t *sd_get_by_num(size_t num)
+// {
+// 	if (num <= sd_get_num()) {
+// 		return &sd_cards[num];
+// 	} else {
+// 		return NULL;
+// 	}
+// }
 
-size_t spi_get_num()
-{
-	return count_of(spis);
-}
+// size_t spi_get_num()
+// {
+// 	return count_of(spis);
+// }
 
-spi_t *spi_get_by_num(size_t num)
-{
-	if (num <= sd_get_num()) {
-		return &spis[num];
-	} else {
-		return NULL;
-	}
-}
+// spi_t *spi_get_by_num(size_t num)
+// {
+// 	if (num <= sd_get_num()) {
+// 		return &spis[num];
+// 	} else {
+// 		return NULL;
+// 	}
+// }
 
 /* [] END OF FILE */

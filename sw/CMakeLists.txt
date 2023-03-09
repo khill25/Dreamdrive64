@@ -27,7 +27,7 @@ pico_sdk_init()
 add_subdirectory(lib/freertos-kernel/portable/ThirdParty/GCC/RP2040 FreeRTOS-Kernel)
 
 # Include 3rd party SDCard implementation
-add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/FatFs_SPI)
+add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/src)
 
 # Add shared code
 add_subdirectory(n64_cic)

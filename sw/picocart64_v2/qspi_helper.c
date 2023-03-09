@@ -159,7 +159,7 @@ void qspi_oeover_disable(void)
 #define CMD_READ_STATUS      		0x05
 #define PSRAM_ENTER_QUAD_MODE	  	0x35
 
-#define SPI_DEFAULT_CLK_DIVIDER 	8 // when running in spi mode, divide sys clk by 4
+#define SPI_DEFAULT_CLK_DIVIDER 	4 // when running in spi mode, divide sys clk by 4
 ////////////////////////////////////////////////////////////
 
 static ssi_hw_t *const ssi = (ssi_hw_t *) XIP_SSI_BASE;
@@ -230,6 +230,17 @@ void qspi_enable_qspi(int startingChipIndex, int lastChipIndex) {
     qspi_flush_xip_cache();
 	qspi_init_qspi();
 
+    // change slew rate
+    // for (int i = 0; i < 6; i++) {
+    //     hw_write_masked(&pads_qspi_hw->io[i],
+    //     (uint)0 << PADS_QSPI_GPIO_QSPI_SCLK_SLEWFAST_LSB,
+    //     PADS_QSPI_GPIO_QSPI_SCLK_SLEWFAST_BITS
+    //     );
+    //     //PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_LSB
+    //     //PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_BITS
+    //     // printf("[%d] %08x\n", i, pads_qspi_hw->io[i]);
+    // }
+
 	psram_set_cs(startingChipIndex); // Use the PSRAM chip
 }
 
@@ -239,6 +250,7 @@ void qspi_enable_flash(int clk_divider) {
 	qspi_oeover_normal(true);
 	ssi_hw->ssienr = 0;
 	ssi_hw->baudr = clk_divider; // change baud
+    ssi->rx_sample_dly = 4;
 	ssi_hw->ssienr = 1;
 }
 
@@ -352,6 +364,48 @@ void qspi_spi_do_cmd(uint8_t cmd, const uint8_t *tx, uint8_t *rx, size_t count) 
     qspi_cs_force(OUTOVER_LOW);
     ssi->dr0 = cmd;
     qspi_spi_put_get(tx, rx, count, 1);
+}
+
+void qspi_qspi_do_cmd(uint8_t cmd) {
+    ssi->dr0 = cmd;
+    int rx_skip = 1;
+    uint8_t *tx = NULL;
+    uint8_t *rx = NULL;
+    int count = 0;
+    //program_flash_put_get(NULL, NULL, 0, 1);
+    // Make sure there is never more data in flight than the depth of the RX
+    // FIFO. Otherwise, when we are interrupted for long periods, hardware
+    // will overflow the RX FIFO.
+    const uint max_in_flight = 16 - 2; // account for data internal to SSI
+    size_t tx_count = count;
+    size_t rx_count = count;
+    while (tx_count || rx_skip || rx_count) {
+        // NB order of reads, for pessimism rather than optimism
+        uint32_t tx_level = ssi_hw->txflr;
+        uint32_t rx_level = ssi_hw->rxflr;
+        bool did_something = false; // Expect this to be folded into control flow, not register
+        if (tx_count && tx_level + rx_level < max_in_flight) {
+            ssi->dr0 = (uint32_t) (tx ? *tx++ : 0);
+            --tx_count;
+            did_something = true;
+        }
+        if (rx_level) {
+            uint8_t rxbyte = ssi->dr0;
+            did_something = true;
+            if (rx_skip) {
+                --rx_skip;
+            } else {
+                if (rx)
+                    *rx++ = rxbyte;
+                --rx_count;
+            }
+        }
+        // APB load costs 4 cycles, so only do it on idle loops (our budget is 48 cyc/byte)
+        // if (!did_something && __builtin_expect(program_flash_was_aborted(), 0))
+        if (!did_something) {
+           break;
+        }
+    }
 }
 
 // Used to exit quad mode on the current psram chip. 
@@ -563,7 +617,7 @@ void qspi_init_qspi() {
             (SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A  // Command and address both in serial format
                     << SSI_SPI_CTRLR0_TRANS_TYPE_LSB);
 
-	ssi->rx_sample_dly = 3;
+	ssi->rx_sample_dly = 4;
     ssi->ssienr = 1;
 }
 

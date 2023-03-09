@@ -169,6 +169,20 @@ void verify_rom_data() {
 		// Read 512 bytes of data at a time into a buffer, loop until we have read 8MB
 		// for(int k = 0; k < PSRAM_CHIP_CAPACITY_BYTES; k+=512) {
         for(int k = 0; k < numBytesToRead; k+=512) {
+
+/*
+            for(int l = 0; l < 0x50; l++) {
+                volatile uint16_t word = ptr_16[l];
+                if (l % 4 == 0) { printf("\n[%08x]: ", l*2); }
+                printf("%04x ", word);
+            }
+            
+            while(1) {
+                //stall
+                tight_loop_contents();
+            }
+            */
+
 			// Command instruction
 			uart_tx_program_putc(COMMAND_START);
     		uart_tx_program_putc(COMMAND_START2);
@@ -246,6 +260,7 @@ void mcu2_verify_sent_rom_data() {
             verify_data_whole_array_error_count++;
             if (verify_data_whole_array_error_count < 8) {
                 verify_data_error_addresses[verify_data_whole_array_error_count] = addr+(i*2);
+                printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
             }
             verify_data_chipErrorCount[verify_data_currentChip]++;
         }
@@ -278,8 +293,8 @@ void mcu2_verify_sent_rom_data() {
 }
 
 void load_selected_rom() {
-    printf("Loading '%s'...\n", sd_selected_rom_title);
-    load_new_rom(sd_selected_rom_title);
+    printf("Loading '%s'...\n", "savetest.z64"); //sd_selected_rom_title);
+    load_new_rom("savetest.z64");//sd_selected_rom_title);
 }
 
 void load_new_rom(char* filename) {
@@ -327,14 +342,12 @@ void load_new_rom(char* filename) {
     // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
     int currentPSRAMChip = START_ROM_LOAD_CHIP_INDEX;
-    qspi_enable_spi(4, currentPSRAMChip);
+    qspi_enable_spi(8, currentPSRAMChip);
 
+    printf("Writing to psram...\n");
 	int len = 0;
 	int total = 0;
 	uint64_t t0 = to_us_since_boot(get_absolute_time());
-    bool hasDebuged = false;
-
-    printf("Writing to psram...\n");
 	do {
         fr = f_read(&fil, buf, sizeof(buf), &len);
         uint32_t addr = total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
@@ -350,13 +363,6 @@ void load_new_rom(char* filename) {
             printf("Total bytes: %d. Bytes remaining = %ld\n", total, (filinfo.fsize - total));
             currentPSRAMChip = newChip;
             psram_set_cs(currentPSRAMChip); // Switch the PSRAM chip
-        }
-
-        if(!hasDebuged) {
-            hasDebuged = true;
-            for(int i = 0; i < 16; i++) {
-                printf("%02x ", buf[i]);
-            }
         }
 
 	} while (len > 0);
@@ -379,6 +385,7 @@ void load_new_rom(char* filename) {
     // Now enable xip and try to read
     for (int o = 1; o <= 8; o++) {
         psram_set_cs(o); // Set the PSRAM chip to use
+        sleep_ms(50);
         printf("\n\nCheck data from U%u...\n", o);
         volatile uint32_t *ptr = (volatile uint32_t *)0x13000000;
         for (int i = 0; i < 128; i++) {
@@ -701,8 +708,7 @@ void send_data(uint32_t sectorCount) {
     do {
         loopCount++;
 
-        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
-        
+        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);        
         if (dr != RES_OK) {
             printf("Error reading disk: %d\n", dr);
         } 

@@ -50,6 +50,7 @@ void qspi_enable_qspi(int startingChipIndex, int lastChipIndex);
 void qspi_enable_flash(int clk_divider);
 void qspi_init_qspi();
 void qspi_qspi_exit_quad_mode();
+void qspi_qspi_do_cmd(uint8_t cmd);
 
 void qspi_spi_put_get(const uint8_t *tx, uint8_t *rx, size_t count, size_t rx_skip);
 void qspi_spi_do_cmd(uint8_t cmd, const uint8_t *tx, uint8_t *rx, size_t count);

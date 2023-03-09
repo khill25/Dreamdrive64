@@ -168,11 +168,18 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			last_addr += 2;
 
 			// Patch bus speed here if needed 
-			next_word = 0xFF40; // Slowest speed
+			// next_word = 0xFF40; // Slowest speed
 			// next_word = 0x8040; // boots @ 266MHz
-			// next_word = 0x4040; // boots @ 266
+			next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			// next_word = 0x2040;
+			// next_word = 0x1940;
+			// next_word = 0x1840;
+			// next_word = 0x1740;
+			// next_word = 0x1640; // boots @ 300 (psram divider = 4)
+			// next_word = 0x1540;
+			// next_word = 0x1440;
+			// next_word = 0x1340;
 			// next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
 		
 			addr = n64_pi_get_value(pio);
@@ -184,14 +191,19 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// If we are loading data from psram, use dma, otherwise just use the array in flash.
 			if (g_loadRomFromMemoryArray) {
 				dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-				dma_channel_start(dma_chan);
-				dma_channel_wait_for_finish_blocking(dma_chan);
+				dma_hw->multi_channel_trigger = 1u << dma_chan;
+				while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
 				next_word = dmaBuffer[0];
-				dma_channel_start(dma_chan);
+				dma_hw->multi_channel_trigger = 1u << dma_chan; // dma_channel_start(dma_chan);
+				// dma_channel_start(dma_chan);
+				// dma_channel_wait_for_finish_blocking(dma_chan);
+				// next_word = dmaBuffer[0];
+				// dma_channel_start(dma_chan);
 			} else {
 				uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
 				const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
 				next_word = chunk_16[(last_addr & COMPRESSION_MASK) >> 1];
+				// next_word = 0;
 			}
 			
 			// ROM patching done
@@ -205,10 +217,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			}
 		} else if (last_addr >= CART_SRAM_START && last_addr <= CART_SRAM_END) {
 			// Domain 2, Address 2 Cartridge SRAM
+			// Pre-fetch from the address
+			next_word = sram[resolve_sram_address(last_addr) >> 1];
 			do {
-				// Pre-fetch from the address
-				next_word = sram[resolve_sram_address(last_addr) >> 1];
-
 				// Read command/address
 				addr = n64_pi_get_value(pio);
 
@@ -219,15 +230,11 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					last_addr += 2;
 				} else if (addr == 0) {
 					// READ
-					pio_sm_put(pio, 0, next_word);
+					pio->txf[0] = next_word;
 					last_addr += 2;
 					next_word = sram[resolve_sram_address(last_addr) >> 1];
 				} else {
 					// New address
-					break;
-				}
-
-				if (g_restart_pi_handler) {
 					break;
 				}
 			} while (1);
@@ -245,7 +252,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 				// Set the correct read address
 				dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-				dma_channel_start(dma_chan);
+				dma_hw->multi_channel_trigger = 1u << dma_chan; //dma_channel_start(dma_chan);
 				dma_bi = 0; // reset buffer index
 			}
 			

@@ -192,15 +192,31 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			uint currentChipIndex = START_ROM_LOAD_CHIP_INDEX;
 			qspi_enable_qspi(currentChipIndex, MAX_MEMORY_ARRAY_CHIP_INDEX);
 
+			// for(int i = 1; i <= 8; i++) {
+			// 	qspi_qspi_do_cmd(0x0C);
+			// }
+
 			// testReadRomData();
 			// verify_rom_data();
+
+			// Exit quad mode
+			// for(int i = 1; i <= 8; i++) {
+			// 	psram_set_cs(i);
+			// 	qspi_qspi_exit_quad_mode();
+			// 	sleep_ms(10);
+			// }
 
 			// rom is loaded now
 			g_loadRomFromMemoryArray = true; // read from psram
 			isWaitingForRomLoad = false;
 			sd_is_busy = false;
 			readingData = false;
-			startJoybus = true;
+
+			// disable uart rx
+			// pio_uart_stop(false, true);
+
+			// Start joybus
+			// startJoybus = true;
 		}
 
 		if (readingData) {
@@ -377,16 +393,22 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
+	// const int freq_khz = 210000;
 	// const int freq_khz = 250000;
-	const int freq_khz = 266000;
+	// const int freq_khz = 266000;
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
+	// const int freq_khz = 332000;
+	const int freq_khz = 360000;
+	// const int freq_khz = 384000;
+	// const int freq_khz = 400000;
 
 	// IMPORTANT: For the serial comms between mcus to work properly 
 	// both mcus must be run at the same clk speed or have the pio divder set accordingly
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
+	vreg_set_voltage(VREG_VOLTAGE_1_25);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	gpio_configure(mcu1_gpio_config, ARRAY_SIZE(mcu1_gpio_config));
