@@ -197,7 +197,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// }
 
 			// testReadRomData();
-			// verify_rom_data();
+			verify_rom_data();
 
 			// Exit quad mode
 			// for(int i = 1; i <= 8; i++) {

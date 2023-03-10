@@ -139,6 +139,9 @@ char g_infoPanelTextBuf[300];
 char selection_visible_text_buffer[MAX_VISIBLE_CHARACTERS_LIST_VIEW]; // used to scroll long text
 char* aButtonActionText = "Load ROM";
 char* bButtonActionText = "Back";
+char* selectionBloopFileName = "selection2.wav";
+char* backBloopFileName = "back.wav";
+xm64player_t xm;
 
 /* Layout */
 #define INFO_PANEL_WIDTH (192 + (MARGIN_PADDING * 2)) // NEEDS PARENS!!! Seems the compiler doesn't evaluate the define before using it for other defines
@@ -1090,6 +1093,15 @@ static void init_sprites(void) {
 
     a_button_icon = read_sprite("a-button-icon-squish.sprite");
     b_button_icon = read_sprite("b-button-icon-squish.sprite");
+    
+    audio_init(44100, 4);
+	mixer_init(16);  // Initialize up to 16 channels
+
+	// Bump maximum frequency of music channel to 128k.
+	// The default is the same of the output frequency (44100), but we want to
+	// let user increase it.
+	mixer_ch_set_limits(CHANNEL_MUSIC, 0, 128000, 0);
+    
 
     memset(selection_visible_text_buffer, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
 
