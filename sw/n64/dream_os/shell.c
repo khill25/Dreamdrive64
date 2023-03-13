@@ -141,7 +141,6 @@ char* aButtonActionText = "Load ROM";
 char* bButtonActionText = "Back";
 char* selectionBloopFileName = "selection2.wav";
 char* backBloopFileName = "back.wav";
-xm64player_t xm;
 
 /* Layout */
 #define INFO_PANEL_WIDTH (192 + (MARGIN_PADDING * 2)) // NEEDS PARENS!!! Seems the compiler doesn't evaluate the define before using it for other defines
@@ -186,6 +185,10 @@ void loadRomAtSelection(int selection) {
     char* fileToLoad = malloc(sizeof(char*) * 256);
     sprintf(fileToLoad, "%s", g_current_dir_entries[selection]->filename);
 
+    #if RENDER_CONSOLE_ONLY == 1
+    printf("%s\n", fileToLoad);
+    #endif
+
     // Write the file name to the cart buffer
     uint32_t len_aligned32 = (strlen(fileToLoad) + 3) & (-4);
     data_cache_hit_writeback_invalidate(fileToLoad, len_aligned32);
@@ -227,7 +230,8 @@ static uint8_t pc64_sd_wait() {
     return 0;
 }
 
-int boot_cic = 2;
+u8 boot_cic = 2;
+int gameCic = 5; // TODO this needs to be fetched so we can properly assign cic
 // int boot_save = 0;
 void bootRom(display_context_t disp, int silent) {
     if (boot_cic != 0)
@@ -291,7 +295,7 @@ void bootRom(display_context_t disp, int silent) {
 
         // f_mount(0, "", 0);                     /* Unmount the default drive */
         // free(fs);                              /* Here the work area can be discarded */
-        simulate_boot(boot_cic); // boot_cic
+        simulate_boot(gameCic, boot_cic);
     }
 }
 
@@ -1094,14 +1098,8 @@ static void init_sprites(void) {
     a_button_icon = read_sprite("a-button-icon-squish.sprite");
     b_button_icon = read_sprite("b-button-icon-squish.sprite");
     
-    audio_init(44100, 4);
-	mixer_init(16);  // Initialize up to 16 channels
-
-	// Bump maximum frequency of music channel to 128k.
-	// The default is the same of the output frequency (44100), but we want to
-	// let user increase it.
-	mixer_ch_set_limits(CHANNEL_MUSIC, 0, 128000, 0);
-    
+    // audio_init(44100, 4);
+	// mixer_init(16);  // Initialize up to 16 channels
 
     memset(selection_visible_text_buffer, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
 

@@ -197,7 +197,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// }
 
 			// testReadRomData();
-			verify_rom_data();
+			// verify_rom_data();
 
 			// Exit quad mode
 			// for(int i = 1; i <= 8; i++) {
@@ -399,7 +399,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
 	// const int freq_khz = 332000;
-	const int freq_khz = 360000;
+	// const int freq_khz = 360000;
 	// const int freq_khz = 384000;
 	// const int freq_khz = 400000;
 
@@ -408,8 +408,8 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
-	vreg_set_voltage(VREG_VOLTAGE_1_25);
-	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
+	// vreg_set_voltage(VREG_VOLTAGE_1_25);
+	// bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	gpio_configure(mcu1_gpio_config, ARRAY_SIZE(mcu1_gpio_config));
 
@@ -418,7 +418,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
-	printf("\n\nMCU1: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
+	// printf("\n\nMCU1: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 
 	// IF READING FROM FROM FLASH... (works for compressed roms)
 	// Enabled to boot menu rom

@@ -170,7 +170,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// Patch bus speed here if needed 
 			// next_word = 0xFF40; // Slowest speed
 			// next_word = 0x8040; // boots @ 266MHz
-			next_word = 0x4040; // boots @ 266
+			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			// next_word = 0x2040;
 			// next_word = 0x1940;
@@ -180,7 +180,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x1540;
 			// next_word = 0x1440;
 			// next_word = 0x1340;
-			// next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
+			next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
 		
 			addr = n64_pi_get_value(pio);
 
@@ -487,8 +487,11 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 					case PC64_REGISTER_SD_SELECT_ROM:
 						// write_word |= n64_pi_get_value(pio) >> 16;
+						pc64_set_sd_rom_selection_length_register(write_word, 0);
 						break;
+
 					case (PC64_REGISTER_SD_SELECT_ROM + 2):
+						pc64_set_sd_rom_selection_length_register(write_word, 1);
 						pc64_set_sd_rom_selection((char *)pc64_uart_tx_buf, write_word);
 						multicore_fifo_push_blocking(CORE1_LOAD_NEW_ROM_CMD);
 						break;

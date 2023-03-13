@@ -30,7 +30,9 @@
         "stdio.h": "c",
         "io_qspi.h": "c",
         "compare": "c",
-        "rtc.h": "c"
+        "rtc.h": "c",
+        "reset_reason.h": "c",
+        "gpio_helper.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

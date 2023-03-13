@@ -9,6 +9,7 @@
 #include "pico/stdlib.h"
 #include "hardware/structs/ssi.h"
 #include "hardware/structs/ioqspi.h"
+#include "hardware/vreg.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -54,6 +55,15 @@ void vApplicationGetTimerTaskMemory(StaticTask_t ** ppxTimerTaskTCBBuffer, Stack
 
 int main(void)
 {
+	// gpio_init(15);
+	// gpio_set_dir(15, true);
+	// gpio_put(15, 1);
+
+	// const int freq_khz = 133000;
+	const int freq_khz = 360000;
+	vreg_set_voltage(VREG_VOLTAGE_1_25);
+	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
+
 	// On MCU1, PIN_ID is pulled low externally.
 	// On MCU2, PIN_ID is pulled high externally and connected to MCU1.RUN.
 	gpio_init(PIN_ID);
@@ -64,16 +74,16 @@ int main(void)
 	int mcu_id = gpio_get(PIN_ID) + 1;
 	PC64_MCU_ID = mcu_id;
 
-	// Turn off SSI
-	ssi_hw->ssienr = 0;
-
-	// // Disable output enable (OE) on all QSPI IO pins
-	qspi_oeover_disable();
-
 	if (mcu_id == MCU1_ID) {
 		mcu1_main();
 	} else if (mcu_id == MCU2_ID) {
-		// It's up to MCU2 to let MCU1 boot
+
+		// Turn off SSI
+		ssi_hw->ssienr = 0;
+		// Disable output enable (OE) on all QSPI IO pins
+		qspi_oeover_disable();
+		
+		// It's up to MCU2 to let MCU1 boot 
 		mcu2_main();
 	}
 	// Never reached

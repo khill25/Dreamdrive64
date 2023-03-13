@@ -56,4 +56,4 @@
 
 // [WRITE] write the selected file name that should be loaded into memory
 // 255 bytes
-#define PC64_REGISTER_SD_SELECT_ROM PC64_REGISTER_SD_READ_NUM_SECTORS + 0x4
+#define PC64_REGISTER_SD_SELECT_ROM (PC64_REGISTER_SD_READ_NUM_SECTORS + 0x4)

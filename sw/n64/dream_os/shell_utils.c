@@ -711,7 +711,7 @@ int is_valid_rom(unsigned char *buffer) {
 #define RAM_SIZE_2  *(vu32 *)0x800003F0
 
 // void simulate_boot(u32 cic_chip, u8 gBootCic, u32 *cheat_lists[2])
-void simulate_boot(u32 cic_chip) {
+void simulate_boot(u32 cic_chip, u8 gBootCic) {
     short int gCheats = 0;
 
     // Clear screen
@@ -730,8 +730,8 @@ void simulate_boot(u32 cic_chip) {
     IO_WRITE(PI_BSD_DOM1_RLS_REG, lat >> 20);
 
     // Fix RAM size location (State required by CIC-NUS-6105)
-    // vu32 *ram_size = (cic_chip == CIC_6105) ? &RAM_SIZE_2 : &RAM_SIZE_1;
-    // *ram_size = (gBootCic == CIC_6105) ? RAM_SIZE_2 : RAM_SIZE_1;
+    vu32 *ram_size = (cic_chip == CIC_6105) ? &RAM_SIZE_2 : &RAM_SIZE_1;
+    *ram_size = (gBootCic == CIC_6105) ? RAM_SIZE_2 : RAM_SIZE_1;
 
     // if (force_tv) {
     //     /*

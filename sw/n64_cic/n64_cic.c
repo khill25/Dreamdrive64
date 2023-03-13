@@ -110,11 +110,13 @@ static uint8_t pin_dio;
 
 /* Select SEED and CHECKSUM here */
 const unsigned char _CicSeed = CIC6102_SEED;
+// const unsigned char _CicSeed = CIC6103_SEED;
 // const unsigned char _CicSeed = CIC6105_SEED;
 
 const unsigned char _CicChecksum[] = {
+	// CIC6103_CHECKSUM
 	CIC6102_CHECKSUM
-		// CIC6105_CHECKSUM
+	// CIC6105_CHECKSUM
 };
 
 /* NTSC initial RAM */
@@ -490,7 +492,7 @@ static void InitRam(unsigned char isPal)
 	}
 }
 
-void n64_cic_run(uint8_t _pin_cr, uint8_t _pin_dclk, uint8_t _pin_dio)
+void __not_in_flash_func(n64_cic_run)(uint8_t _pin_cr, uint8_t _pin_dclk, uint8_t _pin_dio)
 {
 	unsigned char isPal;
 

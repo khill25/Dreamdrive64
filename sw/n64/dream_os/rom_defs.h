@@ -178,6 +178,6 @@ void swap_header(unsigned char* header, int loadlength);
 
 u8 getCicType(u8 bios_cic);
 
-void simulate_boot(u32 cic_chip);
+void simulate_boot(u32 cic_chip, u8 gBootCic);
 
 #endif

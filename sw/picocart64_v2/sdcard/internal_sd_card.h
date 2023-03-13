@@ -36,6 +36,9 @@ void pc64_set_sd_read_sector_part(int index, uint32_t value);
 // set the number of sectors to read
 void pc64_set_sd_read_sector_count(int index, uint32_t count);
 
+// Set the length of selected rom title
+void pc64_set_sd_rom_selection_length_register(uint32_t value, int index);
+
 // Set selected rom title, max 256 characters
 void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len);
 

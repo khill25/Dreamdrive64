@@ -44,6 +44,7 @@ void update_rom_cache(uint32_t address);
 
 void qspi_enable(int clk_divider);
 void qspi_disable();
+void qspi_oeover_normal(bool enable_ss);
 void qspi_oeover_disable(); // Advanced function, generally, use qspi_disable if you are turning off the ssi hardware 
 void qspi_enable_spi(int clk_divider, int startingChipIndex);
 void qspi_enable_qspi(int startingChipIndex, int lastChipIndex);

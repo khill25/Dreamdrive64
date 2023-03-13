@@ -49,7 +49,7 @@
 #define DEBUG_MCU2_PRINT 0
 #define PRINT_BUFFER_AFTER_SEND 0
 #define MCU1_ECHO_RECEIVED_DATA 0
-#define MCU2_PRINT_UART 0
+#define MCU2_PRINT_UART 1
 
 int PC64_MCU_ID = -1;
 
@@ -63,7 +63,8 @@ volatile uint32_t sd_sector_count_registers[2];
 volatile uint32_t sd_read_sector_start;
 volatile uint32_t sd_read_sector_count;
 char sd_selected_rom_title[256];
-uint32_t sd_selected_title_length = 0;
+volatile uint32_t sd_selected_title_length_registers[2];
+volatile uint32_t sd_selected_title_length = 0;
 volatile bool sd_is_busy = false;
 
 // Variables used for signalling sd data send 
@@ -90,9 +91,30 @@ void pc64_set_sd_read_sector_count(int index, uint32_t count) {
     sd_sector_count_registers[index] = count; 
 }
 
+void pc64_set_sd_rom_selection_length_register(uint32_t value, int index) {
+    sd_selected_title_length_registers[index] = value;
+    uart_tx_program_putc(index);
+    uart_tx_program_putc(sd_selected_title_length >> 24);
+    uart_tx_program_putc(sd_selected_title_length >> 16);
+    uart_tx_program_putc(sd_selected_title_length >> 8);
+    uart_tx_program_putc(sd_selected_title_length);
+    uart_tx_program_putc(0x1B);
+}
+
 void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len) {
-    sd_selected_title_length = len;
-    strcpy(sd_selected_rom_title, titleBuffer);
+    sd_selected_title_length = len >> 16;
+
+    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 24);
+    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 16);
+    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 8);
+    // uart_tx_program_putc(sd_selected_title_length_registers[0]);
+    uart_tx_program_putc(sd_selected_title_length >> 24);
+    uart_tx_program_putc(sd_selected_title_length >> 16);
+    uart_tx_program_putc(sd_selected_title_length >> 8);
+    uart_tx_program_putc(sd_selected_title_length);
+    // uart_tx_program_putc(0xAA);
+
+    strncpy(sd_selected_rom_title, titleBuffer, sd_selected_title_length);
 }
 
 void pc64_send_sd_read_command(void) {
@@ -142,6 +164,13 @@ void pc64_send_load_new_rom_command() {
     bufferIndex = 0;
     bufferByteIndex = 0;
 
+    uint32_t rom_title_len = strlen(sd_selected_rom_title);
+    // Test for sanity
+    // uart_tx_program_putc(rom_title_len >> 24);
+    // uart_tx_program_putc(rom_title_len >> 16);
+    // uart_tx_program_putc(rom_title_len >> 8);
+    // uart_tx_program_putc(rom_title_len);
+
     // Signal start
     uart_tx_program_putc(COMMAND_START);
     uart_tx_program_putc(COMMAND_START2);
@@ -149,12 +178,16 @@ void pc64_send_load_new_rom_command() {
     // command
     uart_tx_program_putc(COMMAND_LOAD_ROM);
 
-    uint16_t numBytes = strlen(sd_selected_rom_title);
-    uart_tx_program_putc(numBytes >> 8);
-    uart_tx_program_putc(numBytes);
+    // Number of bytes based on the length of the rom title
+    uart_tx_program_putc(rom_title_len >> 8);
+    uart_tx_program_putc(rom_title_len);
+
+    for(int i = 0; i < rom_title_len; i++) {
+        uart_tx_program_putc(sd_selected_rom_title[i]);
+    }
 
     // Send the title to load
-    uart_tx_program_puts(sd_selected_rom_title);
+    // uart_tx_program_puts(sd_selected_rom_title);
 }
 
 volatile uint32_t verify_rom_data_total_bytes_to_read = PSRAM_CHIP_CAPACITY_BYTES * 8; //12 * 1024 * 1024;
@@ -293,8 +326,8 @@ void mcu2_verify_sent_rom_data() {
 }
 
 void load_selected_rom() {
-    printf("Loading '%s'...\n", "savetest.z64"); //sd_selected_rom_title);
-    load_new_rom("savetest.z64");//sd_selected_rom_title);
+    printf("Loading '%s'...\n", sd_selected_rom_title);
+    load_new_rom(sd_selected_rom_title);
 }
 
 void load_new_rom(char* filename) {

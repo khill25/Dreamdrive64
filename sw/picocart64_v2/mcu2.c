@@ -18,10 +18,10 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "esp32_task.h"
+// #include "esp32_task.h"
 #include "n64_cic.h"
 #include "git_info.h"
-#include "led_task.h"
+// #include "led_task.h"
 #include "reset_reason.h"
 #include "pins_mcu2.h"
 #include "utils.h"
@@ -111,8 +111,8 @@ void main_task_entry(__unused void *params)
 
 	// Make sure that ssi hardware is disabled before starting mcu1
 	// qspi_disable();
-	ssi_hw->ssienr = 0;
-	qspi_oeover_disable();
+	// ssi_hw->ssienr = 0;
+	// qspi_oeover_disable();
 
 	// test_read_psram("Resident Evil 2 (USA) (Rev 1).z64");
 	// test_read_psram("Pokemon Stadium 2 (USA).z64");
@@ -124,6 +124,8 @@ void main_task_entry(__unused void *params)
 	// load_new_rom("Perfect Dark (U) (V1.1) [!].z64");
 	// load_new_rom("Resident Evil 2 (USA) (Rev 1).z64");
 	// load_new_rom("Pokemon Stadium 2 (USA).z64");
+	// load_new_rom("1080[en,jp].z64");
+	// load_new_rom("Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64");
 
 	// mcu2_setup_verify_rom_data(); // opens the file into some global variables
 	
@@ -251,7 +253,7 @@ void mcu2_main(void)
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
 	// const int freq_khz = 332000;
-	const int freq_khz = 360000;
+	// const int freq_khz = 360000;
 	// const int freq_khz = 384000;
 	// const int freq_khz = 400000;
 
@@ -260,8 +262,8 @@ void mcu2_main(void)
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
-	vreg_set_voltage(VREG_VOLTAGE_1_25);
-	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
+	// vreg_set_voltage(VREG_VOLTAGE_1_25);
+	// bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	// Init async UART on pin 0/1
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
@@ -270,17 +272,17 @@ void mcu2_main(void)
 
 	set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
 
-	printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
+	// printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 
 	// Enable a 12MHz clock output on GPIO21 / clk_gpout0
 	clock_gpio_init(PIN_MCU2_GPIO21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_XOSC_CLKSRC, 1);
 
-	printf("\n\n----------------------------------------\n");
-	printf("PicoCart64 MCU2 Boot (git rev %08x)\r\n", GIT_REV);
-	printf("Reset reason: 0x%08lX\n", get_reset_reason());
-	printf("clk_sys: %d Hz\n", clock_get_hz(clk_sys));
-	printf("clk_peri: %d Hz\n", clock_get_hz(clk_peri));
-	printf("----------------------------------------\n\n");
+	// printf("\n\n----------------------------------------\n");
+	// printf("PicoCart64 MCU2 Boot (git rev %08x)\r\n", GIT_REV);
+	// printf("Reset reason: 0x%08lX\n", get_reset_reason());
+	// printf("clk_sys: %d Hz\n", clock_get_hz(clk_sys));
+	// printf("clk_peri: %d Hz\n", clock_get_hz(clk_peri));
+	// printf("----------------------------------------\n\n");
 
 	// for (int fkhz = 125000; fkhz < 400000;) {
 	// 	uint vco, postdiv1, postdiv2;
@@ -307,6 +309,10 @@ void mcu2_main(void)
 	// }
 
 	// printf("\n\n");
+
+	// gpio_init(PIN_DEMUX_A0);
+	// gpio_set_dir(PIN_DEMUX_A0, true);
+	// gpio_put(PIN_DEMUX_A0, 1);
 
 	multicore_launch_core1(mcu2_core1_entry);
 
