@@ -22,6 +22,8 @@
 
 #include "rom_defs.h"
 
+#include "animation.h"
+
 /*
 TODO
 Make the more files above/below indicator a sprite or something besides '...'
@@ -52,8 +54,6 @@ Discussion about what the menu feature set::
 #define SCREEN_WIDTH 512
 #define SCREEN_HEIGHT 240
 #define COLOR_TRANSPARENCY_ENABLED 1
-#define MAX_VISIBLE_CHARACTERS_LIST_VIEW (36) // 36 characters can fit with the current margin and spacing
-#define MAX_VISIBLE_CHARACTERS_INFO_PANE (24) // 24 characters can fit with the current margin and spacing
 
  // TODO: It is likely a directory may contain thousands of files
  // Modify the ls function to only buffer a portion of files (up to some MAX)
@@ -136,11 +136,29 @@ char* temp_spritename;
 char g_infoPanelTextBuf[300];
 // sprite_t** g_thumbnail_cache;
 
-char selection_visible_text_buffer[MAX_VISIBLE_CHARACTERS_LIST_VIEW]; // used to scroll long text
+// char selection_visible_text_buffer[MAX_VISIBLE_CHARACTERS_LIST_VIEW]; // used to scroll long text
 char* aButtonActionText = "Load ROM";
 char* bButtonActionText = "Back";
 char* selectionBloopFileName = "selection2.wav";
 char* backBloopFileName = "back.wav";
+
+const char* loading_image_names[] = {
+    "loading_0.sprite", 
+    "loading_1.sprite", 
+    "loading_2.sprite", 
+    "loading_3.sprite", 
+    "loading_4.sprite", 
+    "loading_5.sprite", 
+    "loading_6.sprite"
+};
+sprite_t** loading_sprites;
+sprite_t* loading_sprite_0;
+sprite_t* loading_sprite_1;
+sprite_t* loading_sprite_2;
+sprite_t* loading_sprite_3;
+sprite_t* loading_sprite_4;
+sprite_t* loading_sprite_5;
+sprite_t* loading_sprite_6;
 
 /* Layout */
 #define INFO_PANEL_WIDTH (192 + (MARGIN_PADDING * 2)) // NEEDS PARENS!!! Seems the compiler doesn't evaluate the define before using it for other defines
@@ -178,6 +196,8 @@ color_t BOTTOM_BAR_COLOR = DC_ORANGE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7,
 color_t SELECTION_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
 color_t LOADING_BOX_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
 color_t WHITE_COLOR = { .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0x00 }; // 0xCCCCCC, White
+
+
 
 void loadRomAtSelection(int selection) {
     g_sendingSelectedRom = true;
@@ -342,53 +362,67 @@ static int calculate_num_rows_per_page(void) {
     return rows;
 }
 
-// TODO create a reusable animating scrolling text function
-static bool current_calculate_scroll_item_needs_scroll = true;
+
+animation_text_scroll_t g_current_selection_text_animation = {
+    .needs_to_scroll = true,
+    .visible_start_char_index = -1,
+    .max_visible = MAX_VISIBLE_CHARACTERS_LIST_VIEW,
+    .animation_info = {
+        .current_tick = 0,
+        // .max_ticks = 3,     // step one char ever 3 ticks
+        // .start_delay = 30,  // start animation after 30 ticks
+        .max_ticks = 1,     // step one char ever 3 ticks
+        .start_delay = 10,  // start animation after 30 ticks
+    },
+};
 static int calculated_last_selected_item_index = -1;
-static int selection_visible_start_char_index = -1; // which character to draw the string from
-static int calculate_current_selection_method_called = 0; // how many times the method has been called, for animating
-static int g_numCallsDelayBeforeScrollingStarts = 30;
-static int g_numCallsPerFrameOfCalculateCurrentTextScroll = 3;
 static void calculate_current_selection_visible_text(int currently_selected) {
     // New item
     if (currently_selected != calculated_last_selected_item_index) {
-        calculate_current_selection_method_called = 0;
+        g_current_selection_text_animation.animation_info.current_tick = 0;
         calculated_last_selected_item_index = currently_selected;
-        selection_visible_start_char_index = 0;
-        strncpy(selection_visible_text_buffer, &(g_current_dir_entries[currently_selected]->filename)[selection_visible_start_char_index], MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+        g_current_selection_text_animation.visible_start_char_index = 0;
+        strncpy(g_current_selection_text_animation.visible_text_buffer, 
+            &(g_current_dir_entries[currently_selected]->filename)[g_current_selection_text_animation.visible_start_char_index], 
+            MAX_VISIBLE_CHARACTERS_LIST_VIEW
+        );
 
-        current_calculate_scroll_item_needs_scroll = (strlen(g_current_dir_entries[currently_selected]->filename) > MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+        g_current_selection_text_animation.needs_to_scroll = (strlen(g_current_dir_entries[currently_selected]->filename) > MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+        g_current_selection_text_animation.original_text = g_current_dir_entries[currently_selected]->filename;
     }
+
+    update_scrolling_text_animation(&g_current_selection_text_animation);
 
     // Only need to calculate if there is text to scroll
-    if (!current_calculate_scroll_item_needs_scroll) {
-        return;
-    }
+    // if (!g_current_selection_text_animation.needs_to_scroll) {
+    //     return;
+    // }
 
-    if (
-        (selection_visible_start_char_index != 0 && calculate_current_selection_method_called > g_numCallsPerFrameOfCalculateCurrentTextScroll) || 
-        (selection_visible_start_char_index == 0 && calculate_current_selection_method_called > g_numCallsDelayBeforeScrollingStarts)
-    ) {
-        calculate_current_selection_method_called = 0;
-        selection_visible_start_char_index++;
-        int selection_text_length = strlen(g_current_dir_entries[currently_selected]->filename);
-        if (selection_visible_start_char_index >= selection_text_length) {
-            selection_visible_start_char_index = 0;
-        }
+    // if (
+    //     (g_current_selection_text_animation.visible_start_char_index != 0 && g_current_selection_text_animation.animation_info.current_tick > g_current_selection_text_animation.animation_info.max_ticks) || 
+    //     (g_current_selection_text_animation.visible_start_char_index == 0 && g_current_selection_text_animation.animation_info.current_tick > g_current_selection_text_animation.animation_info.start_delay)
+    // ) {
+    //     g_current_selection_text_animation.animation_info.current_tick = 0;
+    //     g_current_selection_text_animation.visible_start_char_index++;
 
-        // Only need to copy if the text is going to change
-        int charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
-        if ((selection_text_length - selection_visible_start_char_index) > MAX_VISIBLE_CHARACTERS_LIST_VIEW) {
-            charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
-        } else {
-            charsToCopy = selection_text_length - selection_visible_start_char_index;
-        }
+    //     int selection_text_length = strlen(g_current_dir_entries[currently_selected]->filename);
+    //     if (g_current_selection_text_animation.visible_start_char_index >= selection_text_length) {
+    //         g_current_selection_text_animation.visible_start_char_index = 0;
+    //     }
 
-        strncpy(selection_visible_text_buffer, &(g_current_dir_entries[currently_selected]->filename)[selection_visible_start_char_index], charsToCopy);
-        selection_visible_text_buffer[charsToCopy] = '\0';
-    }
+    //     // Only need to copy if the text is going to change
+    //     int charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
+    //     if ((selection_text_length - g_current_selection_text_animation.visible_start_char_index) > MAX_VISIBLE_CHARACTERS_LIST_VIEW) {
+    //         charsToCopy = MAX_VISIBLE_CHARACTERS_LIST_VIEW;
+    //     } else {
+    //         charsToCopy = selection_text_length - g_current_selection_text_animation.visible_start_char_index;
+    //     }
 
-    calculate_current_selection_method_called++;
+    //     strncpy(g_current_selection_text_animation.visible_text_buffer, &(g_current_dir_entries[currently_selected]->filename)[g_current_selection_text_animation.visible_start_char_index], charsToCopy);
+    //     g_current_selection_text_animation.visible_text_buffer[charsToCopy] = '\0';
+    // }
+
+    // g_current_selection_text_animation.animation_info.current_tick++;
 }
 
 /*
@@ -422,7 +456,7 @@ static void render_list(display_context_t display, int currently_selected, int f
 			graphics_draw_box(display, 0, y - 2, ROW_SELECTION_WIDTH, 10, graphics_convert_color(SELECTION_COLOR));
 
             // Render the list item
-		    graphics_draw_text(display, x, y, selection_visible_text_buffer);
+		    graphics_draw_text(display, x, y, g_current_selection_text_animation.visible_text_buffer);
 		} else {
 			x += MARGIN_PADDING;
             
@@ -473,11 +507,11 @@ static void render_info_panel(display_context_t display, int currently_selected)
         }
 
         // Try to load a thumbnail, if this isn't a rom, don't load box art
-        if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
-            LOAD_BOX_ART = false;
-        } else {
-            LOAD_BOX_ART = true;
-        }
+        // if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
+        //     LOAD_BOX_ART = false;
+        // } else {
+        //     LOAD_BOX_ART = true;
+        // }
 
         // Truncate the title text
         memset(info_panel_temp_visible_title, 0, MAX_VISIBLE_CHARACTERS_INFO_PANE);
@@ -538,11 +572,134 @@ static void draw_bottom_bar(display_context_t display) {
     graphics_draw_text(display, x, BOTTOM_BAR_Y + BOTTOM_BAR_HEIGHT/2 - 4, "Back");
 }
 
+animation_image_t rom_loading_animation = {
+    .current_frame = 0,
+    .total_num_frames = 7,
+    .animation_info = {
+        .current_tick = 0,
+        .max_ticks = 2, // use larger number if on real hardware, cen64 runs so slow :=(
+        .start_delay = 0,
+    },
+};
+
+animation_text_scroll_t rom_loading_stream0 = {
+    .needs_to_scroll = true,
+    .visible_start_char_index = 0,
+    .original_text = "00110110110001011000100011111001",
+    .max_visible = 10,
+    .direction = -1,
+    .animation_info = {
+        .current_tick = 0,
+        // .max_ticks = 3,     // step one char ever 3 ticks
+        // .start_delay = 30,  // start animation after 30 ticks
+        .max_ticks = 1,     // step one char ever 3 ticks
+        .start_delay = 0,  // start animation after 30 ticks
+    },
+};
+
+animation_text_scroll_t rom_loading_stream1 = {
+    .needs_to_scroll = true,
+    .visible_start_char_index = 0,
+    .original_text = "11001000100110001010100101010100",
+    .max_visible = 10,
+    .direction = -1,
+    .animation_info = {
+        .current_tick = 0,
+        // .max_ticks = 3,     // step one char ever 3 ticks
+        // .start_delay = 30,  // start animation after 30 ticks
+        .max_ticks = 1,     // step one char ever 3 ticks
+        .start_delay = 0,  // start animation after 30 ticks
+    },
+};
+
+animation_text_scroll_t rom_loading_stream2 = {
+    .needs_to_scroll = true,
+    .visible_start_char_index = 0,
+    .original_text = "00111010010011110101001010101001",
+    .max_visible = 10,
+    .direction = -1,
+    .animation_info = {
+        .current_tick = 0,
+        // .max_ticks = 3,     // step one char ever 3 ticks
+        // .start_delay = 30,  // start animation after 30 ticks
+        .max_ticks = 1,     // step one char ever 3 ticks
+        .start_delay = 0,  // start animation after 30 ticks
+    },
+};
+
 // Janky lol
 char* loadingText[] = { "Loading", "Loading.", "Loading..", "Loading..." };
+// const int loadingBoxWidth = 128;
+// const int loadingBoxHeight = 32;
+const int loadingBoxWidth = 256;
+const int loadingBoxHeight = 64;
+
+void animation_loading_progress(display_context_t display) {
+
+    // Debug stuff, sprites weren't drawing when loaded into the array via a for loop.
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 0, loading_sprites[0]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 32, loading_sprites[1]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 64, loading_sprites[2]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 128, loading_sprites[3]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 160, loading_sprites[4]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 196, loading_sprites[5]);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 228, loading_sprites[6]);
+
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 0,   loading_sprite_0);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 32,  loading_sprite_1);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 64,  loading_sprite_2);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 128, loading_sprite_3);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 160, loading_sprite_4);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 196, loading_sprite_5);
+    // graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2) + 12, 228, loading_sprite_6);
+
+
+    // Border
+    graphics_draw_box(display, 
+        SCREEN_WIDTH / 2 - (loadingBoxWidth+4) / 2, 
+        SCREEN_HEIGHT / 2 - (loadingBoxHeight+4) / 2, 
+        loadingBoxWidth+4, 
+        loadingBoxHeight+4, 
+        graphics_convert_color(WHITE_COLOR)
+    );
+
+    // Actual box
+    graphics_draw_box(display, 
+        SCREEN_WIDTH / 2 - loadingBoxWidth / 2, 
+        SCREEN_HEIGHT / 2 - loadingBoxHeight / 2, 
+        loadingBoxWidth, 
+        loadingBoxHeight, 
+        graphics_convert_color(LOADING_BOX_COLOR)
+    );
+
+    int x = (SCREEN_WIDTH / 2) - 80;
+    int y = (SCREEN_HEIGHT / 2);
+
+    graphics_draw_text(display, x, y, rom_loading_stream0.visible_text_buffer);
+    y = (SCREEN_HEIGHT / 2) - 10;
+    graphics_draw_text(display, x, y, rom_loading_stream1.visible_text_buffer);
+    y = (SCREEN_HEIGHT / 2) + 10;
+    graphics_draw_text(display, x, y, rom_loading_stream2.visible_text_buffer);
+
+    graphics_draw_sprite_trans(display, (SCREEN_WIDTH / 2), SCREEN_HEIGHT / 2 - 32, loading_sprites[rom_loading_animation.current_frame]);
+
+    update_sprite_animation(&rom_loading_animation);
+    update_scrolling_text_animation(&rom_loading_stream0);
+    update_scrolling_text_animation(&rom_loading_stream1);
+    update_scrolling_text_animation(&rom_loading_stream2);
+
+    // if (rom_loading_animation.animation_info.current_tick > rom_loading_animation.animation_info.max_ticks) {
+    //     rom_loading_animation.animation_info.current_tick = 0;
+    //     rom_loading_animation.current_frame++;
+    //     if (rom_loading_animation.current_frame >= rom_loading_animation.total_num_frames) {
+    //         rom_loading_animation.current_frame = 0;
+    //     }
+    // }
+    
+    // rom_loading_animation.animation_info.current_tick++;
+}
+
 int loadingTextIndex = 0;
-const int loadingBoxWidth = 128;
-const int loadingBoxHeight = 32;
 int counter = 0;
 void animate_progress_spinner(display_context_t display) {
     // Border
@@ -651,8 +808,40 @@ void cd(const char* dir, bool isPop) {
     g_current_selected_list_item = 0;
     g_first_visible_list_item = 0;
     
-    // Populate the file list
-    NUM_ENTRIES = ls(dir);
+    if (IS_EMULATOR) {
+        NUM_ENTRIES = ls_emulator(dir);
+    } else {
+        // Populate the file list
+        NUM_ENTRIES = ls(dir);
+    }
+}
+
+int ls_emulator(const char* dir) {
+
+    const char* emulated_file_list[] = {
+        "Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64",
+        "007 - The World is Not Enough (U) [!].z64",
+        "1080 TenEighty Snowboarding (Japan, USA) (En,Ja).n64",
+        "GoldenEye 007 (U) [!].z64"
+        };
+    int numFiles = 4;
+
+    for(int i = 0; i < numFiles; i++) {
+        file_info_t* entry;
+        entry = malloc(sizeof(file_info_t));
+        g_current_max_files_loaded++;
+
+
+        // Populate the file entry
+        entry->filesize = 1024;
+        entry->type = TYPE_FILE;
+        sprintf(entry->filename, "%s", emulated_file_list[i]);
+
+        // Set the entry
+        g_current_dir_entries[i] = entry;
+    }
+
+    return numFiles;
 }
 
 int ls(const char *dir) {
@@ -763,8 +952,14 @@ static void show_list(void) {
     // char debugTextBuffer[100];
 	int max_on_screen = calculate_num_rows_per_page();
 
+    // Malloc the text buffer for current selection text scroll
+    g_current_selection_text_animation.visible_text_buffer = malloc(MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+    memset(g_current_selection_text_animation.visible_text_buffer, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+
     timer_init();
     bool createLoadingTimer = false;
+
+    g_isLoading = true;
 
 	while (1) {
 		static display_context_t display = 0;
@@ -793,7 +988,8 @@ static void show_list(void) {
         draw_bottom_bar(display);
 
         if (g_isLoading) {
-            animate_progress_spinner(display);
+            animation_loading_progress(display);
+            // animate_progress_spinner(display);
         }
         #endif
 
@@ -957,10 +1153,11 @@ sprite_t *read_sprite( const char * const spritename )
         int ret = dfs_read(sp, 1, dfs_size(fp), fp);
         dfs_close(fp);
 
-        if (ret == DFS_ESUCCESS && sp) {
+        if (ret >= DFS_ESUCCESS && sp) {
             printf("height: %d, width: %d\n", sp->height, sp->width);
         } else {
             printf("...Error loading sprite: %d\n", ret);
+            silentWaitForStart();
         }
 
         return sp;
@@ -1092,6 +1289,12 @@ int load_boxart_for_rom(char* filename) {
     return 0;
 }
 
+static void init_loading_animation() {
+    init_scrolling_text_animation(&rom_loading_stream0);
+    init_scrolling_text_animation(&rom_loading_stream1);
+    init_scrolling_text_animation(&rom_loading_stream2);
+}
+
 static void init_sprites(void) {
     printf("init sprites\n");
 
@@ -1101,7 +1304,27 @@ static void init_sprites(void) {
     // audio_init(44100, 4);
 	// mixer_init(16);  // Initialize up to 16 channels
 
-    memset(selection_visible_text_buffer, 0, MAX_VISIBLE_CHARACTERS_LIST_VIEW);
+    // Don't seem to like the array much, will only render the last image AND at index 0
+    // just use janky loading method for now
+    loading_sprites = malloc(sizeof(sprite_t*) * 7);
+    // for(int i = 0; i < 7; i++) {
+    //     loading_sprites[0] = read_sprite(loading_image_names[i]);
+    // }
+    loading_sprite_0 = read_sprite(loading_image_names[0]);
+    loading_sprite_1 = read_sprite(loading_image_names[1]);
+    loading_sprite_2 = read_sprite(loading_image_names[2]);
+    loading_sprite_3 = read_sprite(loading_image_names[3]);
+    loading_sprite_4 = read_sprite(loading_image_names[4]);
+    loading_sprite_5 = read_sprite(loading_image_names[5]);
+    loading_sprite_6 = read_sprite(loading_image_names[6]);
+
+    loading_sprites[0] = loading_sprite_0;
+    loading_sprites[1] = loading_sprite_1;
+    loading_sprites[2] = loading_sprite_2;
+    loading_sprites[3] = loading_sprite_3;
+    loading_sprites[4] = loading_sprite_4;
+    loading_sprites[5] = loading_sprite_5;
+    loading_sprites[6] = loading_sprite_6;
 
     if (IS_EMULATOR) {
         // g_thumbnail_cache = malloc(sizeof(sprite_t*) * 4); // alloc the buffer
@@ -1135,28 +1358,30 @@ static void init_sprites(void) {
 void start_shell(void) {
     controller_init();
 
-    if (usb_initialize()) {
-        char usbcart = usb_getcart();
-        printf("USB Cart %d\n", usbcart);
-        switch (usbcart)
-        {
-        case CART_64DRIVE:
-        case CART_EVERDRIVE:
-        case CART_PC64:
-            IS_EMULATOR = false;
-            break;
-        default:
-            IS_EMULATOR = true;
-        }
-    } else {
-        IS_EMULATOR = true;
-    }
+    // if (usb_initialize()) {
+    //     char usbcart = usb_getcart();
+    //     printf("USB Cart %d\n", usbcart);
+    //     switch (usbcart)
+    //     {
+    //     case CART_64DRIVE:
+    //     case CART_EVERDRIVE:
+    //     case CART_PC64:
+    //         IS_EMULATOR = false;
+    //         break;
+    //     default:
+    //         IS_EMULATOR = true;
+    //     }
+    // } else {
+    //     IS_EMULATOR = true;
+    // }
 
-    if (IS_EMULATOR) {
-        printf("Running in an emulator?\n");
-    } else {
-        printf("Running on real hardware?\n");
-    }
+    // if (IS_EMULATOR) {
+    //     printf("Running in an emulator?\n");
+    // } else {
+    //     printf("Running on real hardware?\n");
+    // }
+
+    IS_EMULATOR = true;
 
     // printf("PC64_CIBASE_ADDRESS_START: %08x\n", PC64_CIBASE_ADDRESS_START);
     // pc64_debug_print();
@@ -1229,5 +1454,6 @@ void start_shell(void) {
     }
 
     init_sprites();
+    init_loading_animation();
     show_list();
 }
