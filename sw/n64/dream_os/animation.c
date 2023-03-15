@@ -1,4 +1,6 @@
 #include <libdragon.h>
+#include <string.h>
+#include <stdlib.h>
 #include "animation.h"
 
 void init_scrolling_text_animation(animation_text_scroll_t* animation) {
@@ -31,7 +33,7 @@ void update_scrolling_text_animation(animation_text_scroll_t* animation) {
     }
 
     // Scroll "normally", right to left
-    if(animation->direction > 0) {
+    if(animation->direction >= 0) {
 
         if (
             (animation->visible_start_char_index != 0 && animation->animation_info.current_tick > animation->animation_info.max_ticks) || 
@@ -74,20 +76,28 @@ void update_scrolling_text_animation(animation_text_scroll_t* animation) {
 
             int charEnd     = animation->visible_start_char_index;
             int charStart   = charEnd - animation->max_visible;
+            int paddingSpaces = 0;
+            // Will need some leading spaces
             if (charStart < 0) {
+                paddingSpaces = 0 - charStart;
                 charStart = 0;
             }
 
-            // Only need to copy if the text is going to change
             int charsToCopy = charEnd - charStart;
-            // if ((selection_text_length - animation->visible_start_char_index) > animation->max_visible) {
-            //     charsToCopy = animation->max_visible;
-            // } else {
-            //     charsToCopy = selection_text_length - animation->visible_start_char_index;
-            // }
-
-            strncpy(animation->visible_text_buffer, &(animation->original_text)[charStart], charsToCopy);
-            animation->visible_text_buffer[charsToCopy] = '\0';
+            if (paddingSpaces > 0) {
+                charsToCopy = animation->max_visible - paddingSpaces;
+                // strncpy(&animation->visible_text_buffer[paddingSpaces], &(animation->original_text)[0], charEnd);
+                for(int i = 0; i < animation->max_visible; i++) {
+                    if (i < paddingSpaces) {
+                        animation->visible_text_buffer[i] = ' ';
+                    } else {
+                        animation->visible_text_buffer[i] = animation->original_text[i-paddingSpaces];
+                    }
+                }
+            } else {
+                strncpy(animation->visible_text_buffer, &(animation->original_text)[charStart], charsToCopy);
+                animation->visible_text_buffer[charsToCopy] = '\0';
+            }
         }
 
     }

@@ -430,7 +430,6 @@ static void calculate_current_selection_visible_text(int currently_selected) {
  */
 static void render_list(display_context_t display, int currently_selected, int first_visible, int max_on_screen)
 {
-
 	/* If we aren't starting at the first row, draw an indicator to show more files above */
 	if (first_visible > 0) {
 		graphics_draw_text(display, MARGIN_PADDING, MENU_BAR_HEIGHT, "...");
@@ -582,11 +581,12 @@ animation_image_t rom_loading_animation = {
     },
 };
 
+#define ANIMATION_LOADING_STRING_WIDTH 15
 animation_text_scroll_t rom_loading_stream0 = {
     .needs_to_scroll = true,
     .visible_start_char_index = 0,
     .original_text = "00110110110001011000100011111001",
-    .max_visible = 10,
+    .max_visible = ANIMATION_LOADING_STRING_WIDTH,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
@@ -601,7 +601,7 @@ animation_text_scroll_t rom_loading_stream1 = {
     .needs_to_scroll = true,
     .visible_start_char_index = 0,
     .original_text = "11001000100110001010100101010100",
-    .max_visible = 10,
+    .max_visible = ANIMATION_LOADING_STRING_WIDTH,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
@@ -616,7 +616,7 @@ animation_text_scroll_t rom_loading_stream2 = {
     .needs_to_scroll = true,
     .visible_start_char_index = 0,
     .original_text = "00111010010011110101001010101001",
-    .max_visible = 10,
+    .max_visible = ANIMATION_LOADING_STRING_WIDTH,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
@@ -632,7 +632,7 @@ char* loadingText[] = { "Loading", "Loading.", "Loading..", "Loading..." };
 // const int loadingBoxWidth = 128;
 // const int loadingBoxHeight = 32;
 const int loadingBoxWidth = 256;
-const int loadingBoxHeight = 64;
+const int loadingBoxHeight = 80;
 
 void animation_loading_progress(display_context_t display) {
 
@@ -672,7 +672,9 @@ void animation_loading_progress(display_context_t display) {
         graphics_convert_color(LOADING_BOX_COLOR)
     );
 
-    int x = (SCREEN_WIDTH / 2) - 80;
+    graphics_draw_text(display, (SCREEN_WIDTH / 2) - 30, (SCREEN_HEIGHT / 2) - loadingBoxHeight/2 + 4, "Loading...");
+
+    int x = (SCREEN_WIDTH / 2) - 118;
     int y = (SCREEN_HEIGHT / 2);
 
     graphics_draw_text(display, x, y, rom_loading_stream0.visible_text_buffer);
@@ -959,7 +961,10 @@ static void show_list(void) {
     timer_init();
     bool createLoadingTimer = false;
 
+    // DEBUG FOR TESTING THE LOADING ANIMATION
     g_isLoading = true;
+    g_current_selection_text_animation.needs_to_scroll = false; // disable this because it's distracting while testing the loading animation
+    
 
 	while (1) {
 		static display_context_t display = 0;
@@ -988,6 +993,7 @@ static void show_list(void) {
         draw_bottom_bar(display);
 
         if (g_isLoading) {
+            g_current_selection_text_animation.needs_to_scroll = false;
             animation_loading_progress(display);
             // animate_progress_spinner(display);
         }
