@@ -10,9 +10,9 @@
 #include <stdlib.h>
 #include <libdragon.h>
 #include <usb.h>
-// #include "fatfs/ff.h"
-// #include "fatfs/ffconf.h"
-// #include "fatfs/diskio.h"
+#include "fatfs/ff.h"
+#include "fatfs/ffconf.h"
+#include "fatfs/diskio.h"
 
 #include "git_info.h"
 #include "shell.h"
@@ -372,10 +372,10 @@ animation_text_scroll_t g_current_selection_text_animation = {
     .max_visible = MAX_VISIBLE_CHARACTERS_LIST_VIEW,
     .animation_info = {
         .current_tick = 0,
-        // .max_ticks = 3,     // step one char ever 3 ticks
-        // .start_delay = 30,  // start animation after 30 ticks
-        .max_ticks = 1,     // step one char ever 3 ticks
-        .start_delay = 10,  // start animation after 30 ticks
+        .max_ticks = 3,     // step one char ever 3 ticks
+        .start_delay = 30,  // start animation after 30 ticks
+        // .max_ticks = 1,     // step one char ever 3 ticks
+        // .start_delay = 10,  // start animation after 30 ticks
     },
 };
 static int calculated_last_selected_item_index = -1;
@@ -967,10 +967,14 @@ static void show_list(void) {
     timer_init();
     bool createLoadingTimer = false;
 
+    audio_init(44100, 2);
+	mixer_init(2);  // Initialize up to 16 channels
+    wav64_t bloopSfx;
+	wav64_open(&bloopSfx, "selection2.wav64");
+
     // DEBUG FOR TESTING THE LOADING ANIMATION
-    g_isLoading = true;
-    g_current_selection_text_animation.needs_to_scroll = false; // disable this because it's distracting while testing the loading animation
-    
+    //g_isLoading = true;
+    //g_current_selection_text_animation.needs_to_scroll = false; // disable this because it's distracting while testing the loading animation
 
 	while (1) {
 		static display_context_t display = 0;
@@ -1041,8 +1045,10 @@ static void show_list(void) {
 		int mag = 0;
 		if (keys.c[0].down) {
 			mag = 1;
+            wav64_play(&bloopSfx, 0);
 		} else if (keys.c[0].up) {
 			mag = -1;
+            wav64_play(&bloopSfx, 0);
 		} else if (keys.c[0].A) {
             switch (g_current_dir_entries[g_current_selected_list_item]->type) {
                 case TYPE_FILE:
@@ -1086,6 +1092,14 @@ static void show_list(void) {
             printf("->%s\n", g_current_dir_entries[g_current_selected_list_item]->filename); // print current selection
         }
         #endif
+
+        // Check whether one audio buffer is ready, otherwise wait for next
+		// frame to perform mixing.
+		if (audio_can_write()) {    	
+			short *buf = audio_write_begin();
+			mixer_poll(buf, audio_get_buffer_length());
+			audio_write_end();
+		}
         
     }
 }
@@ -1312,9 +1326,6 @@ static void init_sprites(void) {
 
     a_button_icon = read_sprite("a-button-icon-squish.sprite");
     b_button_icon = read_sprite("b-button-icon-squish.sprite");
-    
-    // audio_init(44100, 4);
-	// mixer_init(16);  // Initialize up to 16 channels
 
     // Don't seem to like the array much, will only render the last image AND at index 0
     // just use janky loading method for now
