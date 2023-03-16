@@ -15,9 +15,13 @@ typedef struct {
     int max_visible;
     //bool wrap; // If the text should not have any white space at the "end" and simply start repeating the string
     int direction; // positive = text moves right to left, negative = text moves left to right
+    bool soft_scroll; // When true, the text in the visual buffer will stream back in from the appropriate direction instead of popping in all at once
     char* visible_text_buffer;
     char* original_text;
     animation_info_t animation_info;
+
+    // Number of characters that were last visible
+    int last_num_visible;
 } animation_text_scroll_t;
 
 typedef struct {

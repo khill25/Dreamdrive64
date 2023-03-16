@@ -84,6 +84,10 @@ void update_scrolling_text_animation(animation_text_scroll_t* animation) {
             }
 
             int charsToCopy = charEnd - charStart;
+            if(animation->soft_scroll && (animation->visible_start_char_index > (strlen(animation->original_text) - animation->max_visible))) {
+                charsToCopy = strlen(animation->original_text) - animation->visible_start_char_index;
+            }
+
             if (paddingSpaces > 0) {
                 charsToCopy = animation->max_visible - paddingSpaces;
                 // strncpy(&animation->visible_text_buffer[paddingSpaces], &(animation->original_text)[0], charEnd);

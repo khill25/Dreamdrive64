@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <libdragon.h>
 #include <usb.h>
+// #include "fatfs/ff.h"
+// #include "fatfs/ffconf.h"
+// #include "fatfs/diskio.h"
 
 #include "git_info.h"
 #include "shell.h"
@@ -576,7 +579,7 @@ animation_image_t rom_loading_animation = {
     .total_num_frames = 7,
     .animation_info = {
         .current_tick = 0,
-        .max_ticks = 2, // use larger number if on real hardware, cen64 runs so slow :=(
+        .max_ticks = 10, // use larger number if on real hardware, cen64 runs so slow :=(
         .start_delay = 0,
     },
 };
@@ -587,12 +590,13 @@ animation_text_scroll_t rom_loading_stream0 = {
     .visible_start_char_index = 0,
     .original_text = "00110110110001011000100011111001",
     .max_visible = ANIMATION_LOADING_STRING_WIDTH,
+    .soft_scroll = true,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
         // .max_ticks = 3,     // step one char ever 3 ticks
         // .start_delay = 30,  // start animation after 30 ticks
-        .max_ticks = 1,     // step one char ever 3 ticks
+        .max_ticks = 3,     // step one char ever 3 ticks
         .start_delay = 0,  // start animation after 30 ticks
     },
 };
@@ -602,12 +606,13 @@ animation_text_scroll_t rom_loading_stream1 = {
     .visible_start_char_index = 0,
     .original_text = "11001000100110001010100101010100",
     .max_visible = ANIMATION_LOADING_STRING_WIDTH,
+    .soft_scroll = true,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
         // .max_ticks = 3,     // step one char ever 3 ticks
         // .start_delay = 30,  // start animation after 30 ticks
-        .max_ticks = 1,     // step one char ever 3 ticks
+        .max_ticks = 2,     // step one char ever 3 ticks
         .start_delay = 0,  // start animation after 30 ticks
     },
 };
@@ -617,6 +622,7 @@ animation_text_scroll_t rom_loading_stream2 = {
     .visible_start_char_index = 0,
     .original_text = "00111010010011110101001010101001",
     .max_visible = ANIMATION_LOADING_STRING_WIDTH,
+    .soft_scroll = true,
     .direction = -1,
     .animation_info = {
         .current_tick = 0,
