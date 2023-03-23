@@ -95,6 +95,7 @@ uint32_t g_addressModifierTable[] = {
 // }
 
 #define SRAM_SIZE_MASK 0x7FFF
+#define COMBINED_MASK (SRAM_SIZE_MASK | 0x18000) // 0x1FFFF
 static inline uint32_t resolve_sram_address(uint32_t address)
 {
     return (address & SRAM_SIZE_MASK) | ((address & 0xC0000) >> 3);
@@ -186,6 +187,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		false           
 	);
 
+	uint32_t sram_dma_trigger = 1u << sram_dma_chan;
+	uint32_t sram_dma_write_trigger = 1u << sram_dma_write_chan;
+
 	// array_test_method();
 
 	// Wait for reset to be released
@@ -270,36 +274,44 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			}
 		} else if (last_addr >= CART_SRAM_START && last_addr <= CART_SRAM_END) {
 			// Domain 2, Address 2 Cartridge SRAM
-			sram_addr = ((last_addr & SRAM_SIZE_MASK) | ((last_addr & 0xC0000) >> 3)) >> 1;
-			dma_channel_set_read_addr(sram_dma_chan, sram + sram_addr, false);
-			dma_channel_set_write_addr(sram_dma_write_chan, sram + sram_addr, false);
-			dma_hw->multi_channel_trigger = 1u << sram_dma_chan;
+			sram_addr = (last_addr & 0x7FFF) >> 1;;// ((last_addr & SRAM_SIZE_MASK) | ((last_addr & 0xC0000) >> 3)) >> 1;
+			next_word = sram[sram_addr];
+
+			// dma_channel_set_write_addr(sram_dma_write_chan, sram + sram_addr, false);
+			// (&dma_hw->ch[sram_dma_write_chan])->write_addr = (uintptr_t)(sram + sram_addr);
+
+			// dma_channel_set_read_addr(sram_dma_chan, sram + sram_addr, false);
+			// dma_hw->multi_channel_trigger = sram_dma_trigger;
+			
 			do {
 				// Read command/address
-				addr = n64_pi_get_value(pio);
+				// addr = n64_pi_get_value(pio);
+				while((pio->fstat & 0x100) != 0) { tight_loop_contents(); }
+				addr = pio->rxf[0];
+
 				if (addr & 0x00000001) {
 					// We got a WRITE
 					// 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-					sram_dma_buffer = addr >> 16;
-					dma_hw->multi_channel_trigger = 1u << sram_dma_write_chan;
+					// sram_dma_buffer = addr >> 16;
+					// dma_hw->multi_channel_trigger = sram_dma_write_trigger;
+					// last_addr += 2;
+
+					sram[sram_addr++] = addr >> 16;
 					last_addr += 2;
 				} else if (addr == 0) {
 					// READ
-					pio->txf[0] = sram_dma_buffer;
+					// pio->txf[0] = sram_dma_buffer;
+					// last_addr += 2;
+					// dma_hw->multi_channel_trigger = sram_dma_trigger;
+
+					pio->txf[0] = next_word;
 					last_addr += 2;
-					dma_hw->multi_channel_trigger = 1u << sram_dma_chan;
+					next_word = sram[++sram_addr];
 					
 				} else {
 					// New address
 					break;
 				}
-
-				// Don't need the below, it should never be true in this function
-				/*
-				if (g_restart_pi_handler) {
-					break;
-				}
-				*/
 			} while (1);
 		} else if (last_addr >= 0x10000000 && last_addr <= 0x1FBFFFFF) {
 			// Domain 1, Address 2 Cartridge ROM
