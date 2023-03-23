@@ -103,7 +103,6 @@ static const gpio_config_t mcu2_gpio_config[] = {
 	{PIN_SPI1_CS, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 };
 
-#define NEED_LOAD_ROM 1
 void main_task_entry(__unused void *params)
 {
 	int count = 0;
@@ -126,8 +125,6 @@ void main_task_entry(__unused void *params)
 	// load_new_rom("Pokemon Stadium 2 (USA).z64");
 	// load_new_rom("1080[en,jp].z64");
 	// load_new_rom("Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64");
-
-	// mcu2_setup_verify_rom_data(); // opens the file into some global variables
 	
 	vTaskDelay(100);
 	printf("Booting MCU1...\n");
@@ -138,9 +135,11 @@ void main_task_entry(__unused void *params)
 	printf("Finished!\n");
 
 	// Setup PIO UART
-	printf("Initing MCU1<->MCU2 serial bridge...");
-	pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
-	printf("Finshed!\n");
+	// printf("Initing MCU1<->MCU2 serial bridge...");
+	// pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
+	// printf("Finshed!\n");
+
+	mcu2_setup_verify_rom_data(); // opens the file into some global variables
 
 	// Random test stuff, leave in for now as still heavily debugging
 	// vTaskDelay(5000);
@@ -203,15 +202,6 @@ void main_task_entry(__unused void *params)
 			// 	inter_mcu_comms_test();
 			// }
 		}
-
-#if 0
-		printf("----------------------------------------\n");
-		printf("MCU 2 [i=%d]\n", count);
-		printf("Stack usage main_task: %d bytes\n", MAIN_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark(NULL));
-		printf("Stack usage led_task: %d bytes\n", LED_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark((TaskHandle_t) & led_task));
-		printf("Stack usage esp32_task: %d bytes\n", ESP32_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark((TaskHandle_t) & esp32_task));
-		printf("----------------------------------------\n\n");
-#endif
 	}
 }
 

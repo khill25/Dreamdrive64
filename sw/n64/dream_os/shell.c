@@ -10,9 +10,9 @@
 #include <stdlib.h>
 #include <libdragon.h>
 #include <usb.h>
-#include "fatfs/ff.h"
-#include "fatfs/ffconf.h"
-#include "fatfs/diskio.h"
+// #include "fatfs/ff.h"
+// #include "fatfs/ffconf.h"
+// #include "fatfs/diskio.h"
 
 #include "git_info.h"
 #include "shell.h"
@@ -64,7 +64,7 @@ Discussion about what the menu feature set::
  #define FILE_NAME_MAX_LENGTH (MAX_FILENAME_LEN+1)
  #define MAX_DIRECTORY_TRAVERSAL_DEPTH 10
 
- #define RENDER_CONSOLE_ONLY 0
+ #define RENDER_CONSOLE_ONLY 1
 
 /*
  * Need some kind of lookup table or function that can find a thumbnail from a rom name, including the correct region version of the boxart
@@ -131,6 +131,7 @@ bool g_isLoading = false;
 bool g_isRenderingMenu = false;
 int g_current_selected_list_item = 0;
 int g_first_visible_list_item = 0;
+char* g_selectedRomSerial = "NGEE";
 
 // Global Buffers
 static sprite_t* current_thumbnail;
@@ -205,8 +206,28 @@ color_t WHITE_COLOR = { .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0x00 }; // 0xCCCCC
 void loadRomAtSelection(int selection) {
     g_sendingSelectedRom = true;
 
+    // TODO this will only load roms from the root of the SD Card....
     char* fileToLoad = malloc(sizeof(char*) * 256);
     sprintf(fileToLoad, "%s", g_current_dir_entries[selection]->filename);
+
+    char* prefixedFilename = malloc(256);
+    sprintf(prefixedFilename, "sd:/%s", fileToLoad);
+    int ret = read_rom_header_serial_number(g_selectedRomSerial, prefixedFilename);
+    free(prefixedFilename);
+
+    // Figure out the gameCic
+    int saveType = 0; // unused so far
+    char* midValues = "GE";
+    midValues[0] = g_selectedRomSerial[1];
+    midValues[1] = g_selectedRomSerial[2];
+    get_cic_save(midValues, &gameCic, &saveType);
+
+    // TODO also send this info to the cart. If power is still applied it will
+    // be able to restart the game with the correct cic value
+
+    #if RENDER_CONSOLE_ONLY == 1
+    printf("cic: %d, serial: %s", gameCic, g_selectedRomSerial);
+    #endif 
 
     #if RENDER_CONSOLE_ONLY == 1
     printf("%s\n", fileToLoad);
@@ -254,8 +275,7 @@ static uint8_t pc64_sd_wait() {
 }
 
 u8 boot_cic = 2;
-int gameCic = 5; // TODO this needs to be fetched so we can properly assign cic
-// int boot_save = 0;
+int gameCic = 5; 
 void bootRom(display_context_t disp, int silent) {
     if (boot_cic != 0)
     {
@@ -509,11 +529,11 @@ static void render_info_panel(display_context_t display, int currently_selected)
         }
 
         // Try to load a thumbnail, if this isn't a rom, don't load box art
-        // if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
-        //     LOAD_BOX_ART = false;
-        // } else {
-        //     LOAD_BOX_ART = true;
-        // }
+        if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
+            LOAD_BOX_ART = false;
+        } else {
+            LOAD_BOX_ART = true;
+        }
 
         // Truncate the title text
         memset(info_panel_temp_visible_title, 0, MAX_VISIBLE_CHARACTERS_INFO_PANE);
@@ -1294,6 +1314,7 @@ int load_boxart_for_rom(char* filename) {
     char* prefixedFilename = malloc(256);
     sprintf(prefixedFilename, "sd:/%s", filename);
     int ret = read_rom_header_serial_number(temp_serial, prefixedFilename);
+
     free(prefixedFilename);
 
     if (ret != 0) {
@@ -1404,7 +1425,8 @@ void start_shell(void) {
     //     printf("Running on real hardware?\n");
     // }
 
-    IS_EMULATOR = true;
+    // IS_EMULATOR = true;
+    IS_EMULATOR = false;
 
     // printf("PC64_CIBASE_ADDRESS_START: %08x\n", PC64_CIBASE_ADDRESS_START);
     // pc64_debug_print();

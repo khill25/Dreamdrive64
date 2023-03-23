@@ -24,6 +24,8 @@
 #define MCU1_ID   ( 1)
 #define MCU2_ID   ( 2)
 
+bool g_isMCU1 = false;
+
 /*
  * PicoCart64 v2 is connected in the following way:
  * MCU1        - FLASH (+PSRAM) - MCU2
@@ -60,7 +62,21 @@ int main(void)
 	// gpio_put(15, 1);
 
 	// const int freq_khz = 133000;
+	// const int freq_khz = 133000;
+	// const int freq_khz = 180000;
+	// const int freq_khz = 200000;
+	// const int freq_khz = 210000;
+	// const int freq_khz = 220000;
+	// const int freq_khz = 230000;
+	// const int freq_khz = 240000;
+	// const int freq_khz = 250000;
+	// const int freq_khz = 266000;
+	// vreg_set_voltage(VREG_VOLTAGE_1_15); // doubtful this is needed.
+
+	// const int freq_khz = 336000;
 	const int freq_khz = 360000;
+	// const int freq_khz = 380000;
+	// const int freq_khz = 480000;
 	vreg_set_voltage(VREG_VOLTAGE_1_25);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
@@ -75,8 +91,11 @@ int main(void)
 	PC64_MCU_ID = mcu_id;
 
 	if (mcu_id == MCU1_ID) {
+		g_isMCU1 = true;
+
 		mcu1_main();
 	} else if (mcu_id == MCU2_ID) {
+		g_isMCU1 = false;
 
 		// Turn off SSI
 		ssi_hw->ssienr = 0;

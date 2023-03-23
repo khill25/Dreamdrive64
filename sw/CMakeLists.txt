@@ -20,6 +20,14 @@ endif()
 # Copy program to ram during boot
 set(PICO_COPY_TO_RAM 1)
 
+# add_compile_options(
+#         -Wall
+#         -save-temps
+#         -Wno-unused-function # we have some for the docs that aren't called
+#         -Wno-maybe-uninitialized
+#         -O2
+# )
+
 # Initialize the SDK
 pico_sdk_init()
 
@@ -39,10 +47,3 @@ add_subdirectory(picocart64_shared)
 # add_subdirectory(picocart64_v1)
 add_subdirectory(picocart64_v2)
 #add_subdirectory(dualpico)
-
-add_compile_options(
-        -Wall
-        -save-temps
-        -Wno-unused-function # we have some for the docs that aren't called
-        -Wno-maybe-uninitialized
-)

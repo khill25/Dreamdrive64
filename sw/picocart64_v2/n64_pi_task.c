@@ -43,9 +43,12 @@ volatile uint32_t tempChip = 0;
 volatile uint16_t *ptr16 = (volatile uint16_t *)0x13000000; // no cache
 volatile int dma_chan = -1;
 volatile int dma_chan_high = -1;
+volatile int sram_dma_chan = -1;
+volatile int sram_dma_write_chan = -1;
 volatile uint16_t *dmaBuffer;
 volatile uint16_t *dmaBufferHigh;
 volatile uint32_t dma_bi = 0;
+volatile uint16_t sram_dma_buffer;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
 
@@ -76,25 +79,44 @@ uint32_t g_addressModifierTable[] = {
 	PSRAM_ADDRESS_MODIFIER_8
 };
 
+// static inline uint32_t resolve_sram_address(uint32_t address)
+// {	
+// 	uint32_t bank = (address >> 18) & 0x3;
+// 	uint32_t resolved_address;
+
+// 	if (bank) {
+// 		resolved_address = address & (SRAM_256KBIT_SIZE - 1);
+// 		resolved_address |= bank << 15;
+// 	} else {
+// 		resolved_address = address & (sizeof(sram) - 1);
+// 	}
+
+// 	return resolved_address;
+// }
+
+#define SRAM_SIZE_MASK 0x7FFF
 static inline uint32_t resolve_sram_address(uint32_t address)
-{	
-	uint32_t bank = (address >> 18) & 0x3;
-	uint32_t resolved_address;
-
-	if (bank) {
-		resolved_address = address & (SRAM_256KBIT_SIZE - 1);
-		resolved_address |= bank << 15;
-	} else {
-		resolved_address = address & (sizeof(sram) - 1);
-	}
-
-	return resolved_address;
+{
+    return (address & SRAM_SIZE_MASK) | ((address & 0xC0000) >> 3);
 }
 
 static inline uint32_t n64_pi_get_value(PIO pio)
 {
 	uint32_t value = pio_sm_get_blocking(pio, 0);
 	return value;
+}
+
+void __no_inline_not_in_flash_func(array_test_method)(void) {
+	volatile uint32_t sramValue = 0;
+	volatile uint32_t sramAddr = 0;
+	volatile uint16_t* sramPtr = (volatile uint16_t* )sram;
+	uint32_t st = time_us_32();
+	for(volatile int i = 0; i < 1000000; i++) {
+		// sramValue = sram[((sramAddr & SRAM_SIZE_MASK) | ((sramAddr & 0xC0000) >> 3)) >> 1];
+		// sramValue = 0;//*(sramPtr + sramAddr);//sram[sramAddr];
+	}
+	uint32_t tt = time_us_32() - st;
+	printf("%uus \n", tt);
 }
 
 void __no_inline_not_in_flash_func(n64_pi_run)(void)
@@ -132,6 +154,40 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		false           
 	);
 
+	sram_dma_chan = dma_claim_unused_channel(true);
+	dma_channel_config sram_dma_config = dma_channel_get_default_config(sram_dma_chan);
+	channel_config_set_transfer_data_size(&sram_dma_config, DMA_SIZE_16);
+	channel_config_set_read_increment(&sram_dma_config, true);
+	channel_config_set_write_increment(&sram_dma_config, false);
+	// channel_config_set_bswap(&c, true);
+	// channel_config_set_high_priority(&c, true);
+
+	dma_channel_configure(
+		sram_dma_chan,        // Channel to be configured
+		&sram_dma_config,              // The configuration we just created
+		&sram_dma_buffer,       // The initial write address //&pio0->txf[0]
+		sram,           // The initial read address
+		1, 				 // Number of transfers;
+		false           
+	);
+
+	sram_dma_write_chan = dma_claim_unused_channel(true);
+	dma_channel_config sram_dma_write_config = dma_channel_get_default_config(sram_dma_write_chan);
+	channel_config_set_transfer_data_size(&sram_dma_write_config, DMA_SIZE_16);
+	channel_config_set_read_increment(&sram_dma_write_config, false);
+	channel_config_set_write_increment(&sram_dma_write_config, true);
+
+	dma_channel_configure(
+		sram_dma_write_chan,     // Channel to be configured
+		&sram_dma_write_config,  // The configuration we just created
+		sram,      				 // The initial write address //&pio0->txf[0]
+		&sram_dma_buffer, 		// The initial read address
+		1, 				 		// Number of transfers;
+		false           
+	);
+
+	// array_test_method();
+
 	// Wait for reset to be released
 	while (gpio_get(PIN_N64_COLD_RESET) == 0) {
 		tight_loop_contents(); 
@@ -140,6 +196,8 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	volatile uint32_t last_addr;
 	volatile uint32_t addr;
 	volatile uint32_t next_word;
+	volatile uint32_t startTicks = 0;
+	volatile uint32_t sram_addr = 0;
 	
 	// Read addr manually before the loop
 	addr = n64_pi_get_value(pio);
@@ -172,7 +230,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
-			// next_word = 0x2040;
+			// next_word = 0x2040; // Should boot with rp2040's @ 360MHz (qspi at 90MHz)
 			// next_word = 0x1940;
 			// next_word = 0x1840;
 			// next_word = 0x1740;
@@ -195,15 +253,10 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
 				next_word = dmaBuffer[0];
 				dma_hw->multi_channel_trigger = 1u << dma_chan; // dma_channel_start(dma_chan);
-				// dma_channel_start(dma_chan);
-				// dma_channel_wait_for_finish_blocking(dma_chan);
-				// next_word = dmaBuffer[0];
-				// dma_channel_start(dma_chan);
 			} else {
 				uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
 				const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];
 				next_word = chunk_16[(last_addr & COMPRESSION_MASK) >> 1];
-				// next_word = 0;
 			}
 			
 			// ROM patching done
@@ -217,26 +270,36 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			}
 		} else if (last_addr >= CART_SRAM_START && last_addr <= CART_SRAM_END) {
 			// Domain 2, Address 2 Cartridge SRAM
-			// Pre-fetch from the address
-			next_word = sram[resolve_sram_address(last_addr) >> 1];
+			sram_addr = ((last_addr & SRAM_SIZE_MASK) | ((last_addr & 0xC0000) >> 3)) >> 1;
+			dma_channel_set_read_addr(sram_dma_chan, sram + sram_addr, false);
+			dma_channel_set_write_addr(sram_dma_write_chan, sram + sram_addr, false);
+			dma_hw->multi_channel_trigger = 1u << sram_dma_chan;
 			do {
 				// Read command/address
 				addr = n64_pi_get_value(pio);
-
 				if (addr & 0x00000001) {
 					// We got a WRITE
 					// 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-					sram[resolve_sram_address(last_addr) >> 1] = addr >> 16;
+					sram_dma_buffer = addr >> 16;
+					dma_hw->multi_channel_trigger = 1u << sram_dma_write_chan;
 					last_addr += 2;
 				} else if (addr == 0) {
 					// READ
-					pio->txf[0] = next_word;
+					pio->txf[0] = sram_dma_buffer;
 					last_addr += 2;
-					next_word = sram[resolve_sram_address(last_addr) >> 1];
+					dma_hw->multi_channel_trigger = 1u << sram_dma_chan;
+					
 				} else {
 					// New address
 					break;
 				}
+
+				// Don't need the below, it should never be true in this function
+				/*
+				if (g_restart_pi_handler) {
+					break;
+				}
+				*/
 			} while (1);
 		} else if (last_addr >= 0x10000000 && last_addr <= 0x1FBFFFFF) {
 			// Domain 1, Address 2 Cartridge ROM

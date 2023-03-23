@@ -107,14 +107,22 @@ void process_log_buffer() {
 	// } else {
 	// 	printf("%u ", value);
 	// }
-	printf("0x%08x ", value);
+	// printf("0x%08x ", value);
+	while(!uart_tx_program_is_writable()) { tight_loop_contents(); }
+	uart_tx_program_putc(0xAA);
+	uart_tx_program_putc(value >> 24);
+	uart_tx_program_putc(value >> 16);
+	uart_tx_program_putc(value >> 8);
+	uart_tx_program_putc(value);
+	uart_tx_program_putc(0xBB);
+
 	if (log_tail >= LOG_BUFFER_SIZE) {
 		log_tail = 0;
 	}
 
-	if (log_tail % 16 == 0) {
-		printf("\n");
-	}
+	// if (log_tail % 16 == 0) {
+	// 	printf("\n");
+	// }
 }
 
 static int dma_bi = 0;
@@ -148,7 +156,7 @@ uint16_t rom_read_test(int dma_chan) {
 
 uint32_t last_rom_cache_update_address = 0;
 void __no_inline_not_in_flash_func(mcu1_core1_entry)() {	
-	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
+	// pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
 	// pio_uart_stop(false, true); // disable rx?
 
 	bool readingData = false;
@@ -175,12 +183,14 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// }
 		}
 
+		// process_log_buffer();
+
 		if (startJoybus) {
 			startJoybus = false;
 			// Joybus currently runs in a while loop. 
 			// Running the joybus means that other code here
 			// will not run once joybus is started.
-			enable_joybus(); 
+			// enable_joybus(); 
 		}
 
 		// This would typically be used with test load code after a rom has been loaded
@@ -197,7 +207,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// }
 
 			// testReadRomData();
-			// verify_rom_data();
+			verify_rom_data();
 
 			// Exit quad mode
 			// for(int i = 1; i <= 8; i++) {
@@ -416,7 +426,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// Enable STDIO, typically disabled on mcu1 as the uart pin is being used
 	// for serial comms to mcu2.
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
-	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
+	stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
 	// printf("\n\nMCU1: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 

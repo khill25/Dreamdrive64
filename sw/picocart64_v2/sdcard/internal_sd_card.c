@@ -165,11 +165,6 @@ void pc64_send_load_new_rom_command() {
     bufferByteIndex = 0;
 
     uint32_t rom_title_len = strlen(sd_selected_rom_title);
-    // Test for sanity
-    // uart_tx_program_putc(rom_title_len >> 24);
-    // uart_tx_program_putc(rom_title_len >> 16);
-    // uart_tx_program_putc(rom_title_len >> 8);
-    // uart_tx_program_putc(rom_title_len);
 
     // Signal start
     uart_tx_program_putc(COMMAND_START);
@@ -185,37 +180,22 @@ void pc64_send_load_new_rom_command() {
     for(int i = 0; i < rom_title_len; i++) {
         uart_tx_program_putc(sd_selected_rom_title[i]);
     }
-
-    // Send the title to load
-    // uart_tx_program_puts(sd_selected_rom_title);
 }
 
-volatile uint32_t verify_rom_data_total_bytes_to_read = PSRAM_CHIP_CAPACITY_BYTES * 8; //12 * 1024 * 1024;
-void verify_rom_data() {
-	volatile uint16_t *ptr_16 = (volatile uint16_t *)0x13000000;
+volatile int current_verify_test_freq_khz = 210000;
+volatile uint32_t verify_rom_data_total_bytes_to_read = PSRAM_CHIP_CAPACITY_BYTES * 8;
+void verify_rom_data_helper() {
+    volatile uint32_t *ptr_32 = (volatile uint32_t *)0x13000000;
+    volatile uint16_t *ptr_16 = (volatile uint16_t *)0x13000000;
 	volatile uint8_t *ptr_8 = (volatile uint8_t *)0x13000000;
 
 	for(int i = 1; i <= 8; i++) {
 		psram_set_cs(i);
-
         uint32_t numBytesToRead = PSRAM_CHIP_CAPACITY_BYTES;//i == 1 ? PSRAM_CHIP_CAPACITY_BYTES : (4 * 1024 * 1024);
 		// Read 512 bytes of data at a time into a buffer, loop until we have read 8MB
 		// for(int k = 0; k < PSRAM_CHIP_CAPACITY_BYTES; k+=512) {
         for(int k = 0; k < numBytesToRead; k+=512) {
-
-/*
-            for(int l = 0; l < 0x50; l++) {
-                volatile uint16_t word = ptr_16[l];
-                if (l % 4 == 0) { printf("\n[%08x]: ", l*2); }
-                printf("%04x ", word);
-            }
-            
-            while(1) {
-                //stall
-                tight_loop_contents();
-            }
-            */
-
+        // while(1) {
 			// Command instruction
 			uart_tx_program_putc(COMMAND_START);
     		uart_tx_program_putc(COMMAND_START2);
@@ -229,14 +209,20 @@ void verify_rom_data() {
 			// Read one byte from psram and send it to mcu2
 			// Read 512 bytes at a time
 			for(int j = 0; j < 256; j++) {
-				uint32_t addr = (k/2)+ j;
+				volatile uint32_t addr = (k/2) + j;
+                volatile uint16_t word = ptr_16[addr];
+                // volatile uint8_t word = ptr_8[addr];
+                // volatile uint32_t word = ptr_32[addr];
+
+                // printf("[%08x]: %04x\n", addr*2, word);
+                while (!uart_tx_program_is_writable()) {
+                    tight_loop_contents();
+                }
+				uart_tx_program_putc((char)(word));
 
                 while (!uart_tx_program_is_writable()) {
                     tight_loop_contents();
                 }
-
-                volatile uint16_t word = ptr_16[addr];
-				uart_tx_program_putc((char)(word));
                 uart_tx_program_putc((char)(word >> 8));
 			}
 
@@ -245,8 +231,27 @@ void verify_rom_data() {
 			sleep_ms(3);
 		}
 
-        sleep_ms(10);
+        sleep_ms(50);
 	}
+}
+void verify_rom_data() {
+    while(1) {
+        // ssi_hw->ssienr = 0;
+        // if (current_verify_test_freq_khz < 200000) {
+        //     ssi_hw->rx_sample_dly = 1;
+        // } else if (current_verify_test_freq_khz >= 170000 && current_verify_test_freq_khz < 210000) {
+        //     ssi_hw->rx_sample_dly = 2;
+        // } else {
+        //     ssi_hw->rx_sample_dly = 3;
+        // }
+        // ssi_hw->ssienr = 1;
+
+	    verify_rom_data_helper();
+        // current_verify_test_freq_khz += 10000;
+        // bool clockWasSet = set_sys_clock_khz(current_verify_test_freq_khz, false);
+
+        sleep_ms(1000);
+    }
 }
 
 FIL verify_data_fil;
@@ -270,31 +275,41 @@ void mcu2_setup_verify_rom_data() {
 	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
 }
 
+const uint32_t value_to_report_in = (1 * 1024);
 volatile uint32_t verify_data_total = 0;
 volatile int verify_data_currentChip = START_ROM_LOAD_CHIP_INDEX;
 volatile int verify_data_whole_array_error_count = 0;
 volatile int verify_data_chipErrorCount[9] = {0};
 uint32_t verify_data_error_addresses[16] = {0};
+volatile uint32_t numCallsToVerifyFunction = 0;
 void mcu2_verify_sent_rom_data() {
     FRESULT fr;
     char buf[512];
     int len = 0;
+    numCallsToVerifyFunction++;
 
     fr = f_read(&verify_data_fil, buf, sizeof(buf), &len);
     uint32_t addr = verify_data_total - ((verify_data_currentChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
     
+    if(len == 0) {
+        len = 512;
+    }
+
     volatile uint16_t* buf_16 = (volatile uint16_t*)buf;
     volatile uint16_t *ptr_16 = (volatile uint16_t *)pc64_uart_tx_buf;
     
     for(int i = 0; i < len/2; i++) {
         uint16_t word = ptr_16[i];
         uint16_t b = buf_16[i];
+        // if (i < 32 && numCallsToVerifyFunction <= 1) {
+        //     printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
+        // }
         if(b != word) {
             verify_data_whole_array_error_count++;
-            if (verify_data_whole_array_error_count < 8) {
-                verify_data_error_addresses[verify_data_whole_array_error_count] = addr+(i*2);
-                printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
-            }
+            // if (verify_data_whole_array_error_count < 4) {
+                // verify_data_error_addresses[verify_data_whole_array_error_count] = addr+(i*2);
+                // printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
+            // }
             verify_data_chipErrorCount[verify_data_currentChip]++;
         }
     }
@@ -302,26 +317,46 @@ void mcu2_verify_sent_rom_data() {
     verify_data_total += len;
 
     int newChip = psram_addr_to_chip(verify_data_total);
-    if (newChip != verify_data_currentChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
-        printf("\n");
+    if (newChip != verify_data_currentChip) {
         if (verify_data_chipErrorCount[verify_data_currentChip] > 0) {
-            printf("[%d]x = %d\n", verify_data_currentChip, verify_data_chipErrorCount[verify_data_currentChip]);
+            printf("[%d]x = %d | ", verify_data_currentChip, verify_data_chipErrorCount[verify_data_currentChip]);
         } else {
-            printf("[%d].\n", verify_data_currentChip);
+            printf("[%d].| ", verify_data_currentChip);
         }
 
         verify_data_currentChip = newChip;
     }
 
+    // if (numCallsToVerifyFunction % 512 == 0 && numCallsToVerifyFunction > 1) {
+    //     printf(".");
+    // }
+
     // If we have read the entirety of the file, print out the stats
     if (verify_data_total >= verify_rom_data_total_bytes_to_read) {
+        printf("\n");
         uint32_t totalVerifyTime = time_us_32() - verifyDataTime;
         for(int i = 1; i <= 8; i++) {
-            printf("%d errors on chip %d\n", verify_data_chipErrorCount[i], i);
+            //printf("%d errors on chip %d\n", verify_data_chipErrorCount[i], i);
+            verify_data_chipErrorCount[i] = 0; // reset error count
         }
-        printf("Found %d errors looking at all data. Took %u seconds\n\n", verify_data_whole_array_error_count, (totalVerifyTime / 1000000));
-        printf("Finished!\n");
-        while(1) {tight_loop_contents();}
+        printf("Found %d errors\n\n", verify_data_whole_array_error_count);
+        // printf("Finished!\n");
+
+        // More data reset
+        f_rewind(&verify_data_fil);
+        verify_data_total = 0; 
+        verify_data_whole_array_error_count = 0;
+        numCallsToVerifyFunction = 0;
+
+        // increase processor clock
+        // current_verify_test_freq_khz += 10000;
+        // bool clockWasSet = set_sys_clock_khz(current_verify_test_freq_khz, false);
+        // printf("Setting new clock: %dKHz\n", current_verify_test_freq_khz);
+
+        // if(current_verify_test_freq_khz >= 250001) {
+        //     printf("Finished all frequencies for 2x divider.\n");
+        //     while(1) {tight_loop_contents();}
+        // }
     }
 }
 
@@ -412,6 +447,7 @@ void load_new_rom(char* filename) {
 	}
 	printf("---- read file done -----\n\n\n");
 
+    
     // Enter quad mode and enable qspi to do a data sanity check
     qspi_enable_qspi(START_ROM_LOAD_CHIP_INDEX, MAX_MEMORY_ARRAY_CHIP_INDEX);
 
@@ -421,9 +457,9 @@ void load_new_rom(char* filename) {
         sleep_ms(50);
         printf("\n\nCheck data from U%u...\n", o);
         volatile uint32_t *ptr = (volatile uint32_t *)0x13000000;
-        for (int i = 0; i < 128; i++) {
+        for (int i = 0; i < 16; i++) {
             volatile uint32_t word = ptr[i];
-            if (i < 16) {
+            if (i < 4) {
                 printf("PSRAM-MCU2[%08x]: %08x\n", i * 4, word);
             }
         }

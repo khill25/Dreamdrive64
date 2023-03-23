@@ -176,7 +176,9 @@ void pif_boot();
 int is_valid_rom(unsigned char *buffer);
 void swap_header(unsigned char* header, int loadlength);
 
-u8 getCicType(u8 bios_cic);
+int get_cic_save(char *cartid, int *cic, int *save);
+
+// u8 getCicType(u8 bios_cic);
 
 void simulate_boot(u32 cic_chip, u8 gBootCic);
 

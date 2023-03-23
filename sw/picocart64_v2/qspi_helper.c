@@ -223,6 +223,10 @@ void qspi_enable_qspi(int startingChipIndex, int lastChipIndex) {
 
 	for(int i = startingChipIndex; i <= lastChipIndex; i++) {
         psram_set_cs(i);
+        if(g_isMCU1) {
+            //qspi_spi_do_cmd(0xC0, NULL, NULL, 0); // Toggle burst mode, doesn't seem to make much of a difference for higher frequencies?
+        }
+        sleep_ms(10);
         qspi_spi_do_cmd(0x35, NULL, NULL, 0);
         sleep_ms(50);    
     }
@@ -248,9 +252,25 @@ void qspi_enable_flash(int clk_divider) {
 	current_mcu_enable_demux(true);
 	psram_set_cs(0);
 	qspi_oeover_normal(true);
+
+    // for (int i = 0; i < 6; i++) {
+    //     hw_write_masked(&pads_qspi_hw->io[i],
+    //     (uint)3 << PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_LSB,
+    //     PADS_QSPI_GPIO_QSPI_SCLK_DRIVE_BITS);
+    //     // printf("[%d] %08x\n", i, pads_qspi_hw->io[i]);
+    // }
+
+// GPIO_DRIVE_STRENGTH_2MA = 0, ///< 2 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_4MA = 1, ///< 4 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_8MA = 2, ///< 8 mA nominal drive strength
+// GPIO_DRIVE_STRENGTH_12MA = 3 ///< 12 mA nominal drive strength
+
 	ssi_hw->ssienr = 0;
 	ssi_hw->baudr = clk_divider; // change baud
     ssi->rx_sample_dly = 4;
+    // ssi->rx_sample_dly = 3;
+    // ssi->rx_sample_dly = 2;
+    // ssi->rx_sample_dly = 0;
 	ssi_hw->ssienr = 1;
 }
 
@@ -617,7 +637,9 @@ void qspi_init_qspi() {
             (SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A  // Command and address both in serial format
                     << SSI_SPI_CTRLR0_TRANS_TYPE_LSB);
 
-	ssi->rx_sample_dly = 4;
+	ssi->rx_sample_dly = 3;
+    // ssi->rx_sample_dly = 2;
+    // ssi->rx_sample_dly = 1;
     ssi->ssienr = 1;
 }
 

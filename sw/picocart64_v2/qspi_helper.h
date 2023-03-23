@@ -32,6 +32,8 @@
 #define QSPI_SD3_PAD   (4)
 #define QSPI_SS_PAD    (5)
 
+extern bool g_isMCU1;
+
 #define QSPI_QUAD_MODE_CLK_DIVIDER 4 // rp2040@266MHz = 133MHz psram clk
 
 #define LOG_BUFFER_SIZE 2048
