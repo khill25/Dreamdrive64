@@ -45,10 +45,10 @@ volatile int dma_chan = -1;
 volatile int dma_chan_high = -1;
 volatile int sram_dma_chan = -1;
 volatile int sram_dma_write_chan = -1;
-volatile uint16_t *dmaBuffer;
-volatile uint16_t *dmaBufferHigh;
-volatile uint32_t dma_bi = 0;
-volatile uint16_t sram_dma_buffer;
+// volatile uint16_t *dmaBuffer;
+// volatile uint16_t *dmaBufferHigh;
+volatile uint8_t dma_bi = 0;
+// volatile uint16_t sram_dma_buffer;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
 
@@ -141,19 +141,22 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	dma_channel_config c = dma_channel_get_default_config(dma_chan);
 	channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
 	channel_config_set_read_increment(&c, true);
-	channel_config_set_write_increment(&c, false);
+	channel_config_set_write_increment(&c, false);//channel_config_set_write_increment(&c, true);
 	channel_config_set_bswap(&c, true);
 	// channel_config_set_high_priority(&c, true);
 
-	dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
+	volatile uint16_t dmaValue = 0;
+	// uint16_t* dmaBuffer;
+	// dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
 		&c,              // The configuration we just created
-		dmaBuffer,       // The initial write address //&pio0->txf[0]
+		&dmaValue,      // The initial write address
 		ptr16,           // The initial read address
 		1, 				 // Number of transfers;
 		false           
 	);
+	//pc64_uart_tx_buf
 
 	// sram_dma_chan = dma_claim_unused_channel(true);
 	// dma_channel_config sram_dma_config = dma_channel_get_default_config(sram_dma_chan);
@@ -197,6 +200,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		tight_loop_contents(); 
 	}
 
+	// for(int i = 0; i < 32; i += 2) {
+	// 	dma_channel_set_read_addr(dma_chan, ptr16 + (((i - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+	// 	dma_hw->multi_channel_trigger = 1u << dma_chan;
+	// 	while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
+	// 	printf("%08x ", dmaValue);
+	// }
+
 	volatile uint32_t last_addr;
 	volatile uint32_t addr;
 	volatile uint32_t next_word;
@@ -235,7 +245,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
 			next_word = 0x2040; // Should boot with rp2040's @ 360MHz (qspi at 90MHz)
-			// next_word = 0x1940;
+			// next_word = 0x1B40; 
+			
+			//0x1B40 boots@266/4 with dmaValue
+			//0x1A40 no boot@266/4 with dmaValue
+			// next_word = 0x1A40; 
+
+			// next_word = 0x1940; 
 			// next_word = 0x1840;
 			// next_word = 0x1740;
 			// next_word = 0x1640; // boots @ 300 (psram divider = 4)
@@ -255,7 +271,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
 				dma_hw->multi_channel_trigger = 1u << dma_chan;
 				while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
-				next_word = dmaBuffer[0];
+				next_word = dmaValue;//dmaBuffer[0]
 				dma_hw->multi_channel_trigger = 1u << dma_chan; // dma_channel_start(dma_chan);
 			} else {
 				uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
@@ -327,15 +343,14 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 				// Set the correct read address
 				dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
-				dma_hw->multi_channel_trigger = 1u << dma_chan; //dma_channel_start(dma_chan);
-				dma_bi = 0; // reset buffer index
+				dma_hw->multi_channel_trigger = 1u << dma_chan;
 			}
 			
 			do {	
 				if (g_loadRomFromMemoryArray) {
 					while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
-					next_word = dmaBuffer[0];
-					dma_hw->multi_channel_trigger = 1u << dma_chan; // dma_channel_start(dma_chan);
+					next_word = dmaValue;// dmaBuffer[0]
+					dma_hw->multi_channel_trigger = 1u << dma_chan;
 				} else {
 					uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
 					const uint16_t *chunk_16 = (const uint16_t *)rom_chunks[chunk_index];

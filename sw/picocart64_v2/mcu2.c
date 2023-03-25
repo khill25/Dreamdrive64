@@ -135,9 +135,9 @@ void main_task_entry(__unused void *params)
 	printf("Finished!\n");
 
 	// Setup PIO UART
-	printf("Initing MCU1<->MCU2 serial bridge...");
-	pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
-	printf("Finshed!\n");
+	// printf("Initing MCU1<->MCU2 serial bridge...");
+	// pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
+	// printf("Finshed!\n");
 
 	// mcu2_setup_verify_rom_data(); // opens the file into some global variables
 
