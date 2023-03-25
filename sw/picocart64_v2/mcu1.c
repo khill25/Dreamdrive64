@@ -156,7 +156,7 @@ uint16_t rom_read_test(int dma_chan) {
 
 uint32_t last_rom_cache_update_address = 0;
 void __no_inline_not_in_flash_func(mcu1_core1_entry)() {	
-	// pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
+	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
 	// pio_uart_stop(false, true); // disable rx?
 
 	bool readingData = false;
@@ -190,7 +190,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// Joybus currently runs in a while loop. 
 			// Running the joybus means that other code here
 			// will not run once joybus is started.
-			// enable_joybus(); 
+			enable_joybus(); 
 		}
 
 		// This would typically be used with test load code after a rom has been loaded

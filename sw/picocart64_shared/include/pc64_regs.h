@@ -57,3 +57,10 @@
 // [WRITE] write the selected file name that should be loaded into memory
 // 255 bytes
 #define PC64_REGISTER_SD_SELECT_ROM (PC64_REGISTER_SD_READ_NUM_SECTORS + 0x4)
+
+// TODO implement these registers
+// [WRITE] Register to define the cic type. Menu rom will write to this register
+#define PC64_REGISTER_SELECTED_ROM_CIC (PC64_REGISTER_SD_SELECT_ROM + 0x4)
+
+// [WRITE] Register to define the save type. Menu rom will write to this register
+#define PC64_REGISTER_SELECTED_ROM_SAVE_TYPE (PC64_REGISTER_SELECTED_ROM_CIC + 0x4)

@@ -64,7 +64,7 @@ Discussion about what the menu feature set::
  #define FILE_NAME_MAX_LENGTH (MAX_FILENAME_LEN+1)
  #define MAX_DIRECTORY_TRAVERSAL_DEPTH 10
 
- #define RENDER_CONSOLE_ONLY 1
+ #define RENDER_CONSOLE_ONLY 0
 
 /*
  * Need some kind of lookup table or function that can find a thumbnail from a rom name, including the correct region version of the boxart
@@ -201,8 +201,8 @@ color_t SELECTION_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a
 color_t LOADING_BOX_COLOR = DC_BLUE2_COLOR;//{ .r = 0x00, .g = 0x67, .b = 0xC7, .a = 0x00 }; // 0x0067C7, Bright Blue
 color_t WHITE_COLOR = { .r = 0xCC, .g = 0xCC, .b = 0xCC, .a = 0x00 }; // 0xCCCCCC, White
 
-
-
+u8 boot_cic = 2;
+int gameCic = 5; 
 void loadRomAtSelection(int selection) {
     g_sendingSelectedRom = true;
 
@@ -274,8 +274,6 @@ static uint8_t pc64_sd_wait() {
     return 0;
 }
 
-u8 boot_cic = 2;
-int gameCic = 5; 
 void bootRom(display_context_t disp, int silent) {
     if (boot_cic != 0)
     {
@@ -509,6 +507,9 @@ static void render_list(display_context_t display, int currently_selected, int f
     graphics_draw_line(display, x0+1, y0, x1+1, y1, graphics_convert_color(MENU_BAR_COLOR));
 }
 
+#define INFO_PANEL_BOX_ART_LOAD_DELAY 20
+int info_panel_num_cycles_since_last_selection_change = 0;
+bool info_panel_needs_box_art_load = false;
 char* info_panel_temp_visible_title[MAX_VISIBLE_CHARACTERS_INFO_PANE];
 static void render_info_panel(display_context_t display, int currently_selected) {
     /*
@@ -518,6 +519,8 @@ static void render_info_panel(display_context_t display, int currently_selected)
 
    // Only update the text string if we have changed selection
     if (currently_selected != g_lastSelection) {
+        info_panel_num_cycles_since_last_selection_change = 0;
+        info_panel_needs_box_art_load = true;
         memset(g_infoPanelTextBuf, 0, 300);
         memset(temp_serial, 0, 5);
 
@@ -528,12 +531,8 @@ static void render_info_panel(display_context_t display, int currently_selected)
             thumbnail_loaded = false;
         }
 
-        // Try to load a thumbnail, if this isn't a rom, don't load box art
-        if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
-            LOAD_BOX_ART = false;
-        } else {
-            LOAD_BOX_ART = true;
-        }
+        // If we have changed selection don't leave the last thumbnail visible
+        LOAD_BOX_ART = false;
 
         // Truncate the title text
         memset(info_panel_temp_visible_title, 0, MAX_VISIBLE_CHARACTERS_INFO_PANE);
@@ -550,6 +549,25 @@ static void render_info_panel(display_context_t display, int currently_selected)
         }
 
         g_lastSelection = currently_selected;
+    }
+
+    if (info_panel_needs_box_art_load && info_panel_num_cycles_since_last_selection_change >= INFO_PANEL_BOX_ART_LOAD_DELAY) {
+        // Try to load a thumbnail, if this isn't a rom, don't load box art
+        if(load_boxart_for_rom(g_current_dir_entries[currently_selected]->filename) != 0) {
+            LOAD_BOX_ART = false;
+        } else {
+            LOAD_BOX_ART = true;
+        }
+        info_panel_needs_box_art_load = false;
+    } else if (info_panel_needs_box_art_load) {
+        info_panel_num_cycles_since_last_selection_change++;
+
+        // TODO this is a tad jarring for things that aren't roms. Disable for now.
+        // Render text if the user appears to be waiting here so when their controls lock up for the box art load
+        // it might not feel as annoying
+        // if (info_panel_num_cycles_since_last_selection_change >= (INFO_PANEL_BOX_ART_LOAD_DELAY - 1)) {
+        //     graphics_draw_text(display, FILE_PANEL_WIDTH + MARGIN_PADDING, MENU_BAR_HEIGHT + MARGIN_PADDING, "Loading...");
+        // }
     }
 
     int x = FILE_PANEL_WIDTH + MARGIN_PADDING, y = MENU_BAR_HEIGHT + MARGIN_PADDING;
@@ -1327,8 +1345,7 @@ int load_boxart_for_rom(char* filename) {
     }
     
     memset(temp_spritename, 0, 256);
-    // sprintf(temp_spritename, "sd:/N64/sprites/%s.sprite", temp_serial);
-    sprintf(temp_spritename, "sd:/N64/boxart_sprites_32/%s.sprite", temp_serial);
+    sprintf(temp_spritename, "sd:/ddr_firmware/n64/boxart_sprites_32/%s.sprite", temp_serial);
 
     current_thumbnail = load_sprite_from_sd(temp_spritename);
     thumbnail_loaded = true;

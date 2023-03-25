@@ -49,7 +49,7 @@
 #define DEBUG_MCU2_PRINT 0
 #define PRINT_BUFFER_AFTER_SEND 0
 #define MCU1_ECHO_RECEIVED_DATA 0
-#define MCU2_PRINT_UART 1
+#define MCU2_PRINT_UART 0
 
 int PC64_MCU_ID = -1;
 
@@ -62,7 +62,7 @@ volatile uint32_t sd_sector_registers[4];
 volatile uint32_t sd_sector_count_registers[2];
 volatile uint32_t sd_read_sector_start;
 volatile uint32_t sd_read_sector_count;
-char sd_selected_rom_title[256];
+char sd_selected_rom_title[256]; // TODO this buffer will need to be larger if the rom is in a sub directory
 volatile uint32_t sd_selected_title_length_registers[2];
 volatile uint32_t sd_selected_title_length = 0;
 volatile bool sd_is_busy = false;
@@ -93,26 +93,21 @@ void pc64_set_sd_read_sector_count(int index, uint32_t count) {
 
 void pc64_set_sd_rom_selection_length_register(uint32_t value, int index) {
     sd_selected_title_length_registers[index] = value;
-    uart_tx_program_putc(index);
-    uart_tx_program_putc(sd_selected_title_length >> 24);
-    uart_tx_program_putc(sd_selected_title_length >> 16);
-    uart_tx_program_putc(sd_selected_title_length >> 8);
-    uart_tx_program_putc(sd_selected_title_length);
-    uart_tx_program_putc(0x1B);
+    // uart_tx_program_putc(index);
+    // uart_tx_program_putc(sd_selected_title_length >> 24);
+    // uart_tx_program_putc(sd_selected_title_length >> 16);
+    // uart_tx_program_putc(sd_selected_title_length >> 8);
+    // uart_tx_program_putc(sd_selected_title_length);
+    // uart_tx_program_putc(0x1B);
 }
 
 void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len) {
     sd_selected_title_length = len >> 16;
 
-    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 24);
-    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 16);
-    // uart_tx_program_putc(sd_selected_title_length_registers[0] >> 8);
-    // uart_tx_program_putc(sd_selected_title_length_registers[0]);
-    uart_tx_program_putc(sd_selected_title_length >> 24);
-    uart_tx_program_putc(sd_selected_title_length >> 16);
-    uart_tx_program_putc(sd_selected_title_length >> 8);
-    uart_tx_program_putc(sd_selected_title_length);
-    // uart_tx_program_putc(0xAA);
+    // uart_tx_program_putc(sd_selected_title_length >> 24);
+    // uart_tx_program_putc(sd_selected_title_length >> 16);
+    // uart_tx_program_putc(sd_selected_title_length >> 8);
+    // uart_tx_program_putc(sd_selected_title_length);
 
     strncpy(sd_selected_rom_title, titleBuffer, sd_selected_title_length);
 }
@@ -306,10 +301,10 @@ void mcu2_verify_sent_rom_data() {
         // }
         if(b != word) {
             verify_data_whole_array_error_count++;
-            // if (verify_data_whole_array_error_count < 4) {
+            if (verify_data_whole_array_error_count < 4) {
                 // verify_data_error_addresses[verify_data_whole_array_error_count] = addr+(i*2);
-                // printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
-            // }
+                printf("[%08x]: %04x!=%04x\n", addr+(i*2), b, word);
+            }
             verify_data_chipErrorCount[verify_data_currentChip]++;
         }
     }
@@ -360,6 +355,72 @@ void mcu2_verify_sent_rom_data() {
     }
 }
 
+    char *cartIDs[] = {
+        "DZ", "B6", "ZY", "ZZ", "AD", "AL", "B7", "BC", "BD", "BH", "BK", "BM",
+        "BV", "CC", "CH", "CK", "CR", "CT", "CU", "CW", "DL", "DO", "DP", "DQ",
+        "DU", "DY", "EA", "EP", "ER", "FH", "FU", "FW", "FX", "FZ", "GC", "GE",
+        "GV", "HA", "IC", "IJ", "JD", "JF", "JM", "K2", "K4", "KA", "KG", "KI",
+        "KJ", "KT", "LB", "LR", "M6", "M8", "MF", "MI", "ML", "MO", "MQ", "MR",
+        "MU", "MV", "MW", "MX", "N6", "NA", "NB", "NX", "OB", "P2", "P3", "PD",
+        "PF", "PG", "PH", "PN", "PO", "PS", "PW", "RC", "RE", "RI", "RS", "RZ",
+        "S6", "SA", "SC", "SM", "SQ", "SU", "SV", "SW", "T9", "TE", "TJ", "TM",
+        "TN", "TP", "VL", "VY", "W2", "W4", "WL", "WR", "WU", "WX", "XO", "YS",
+        "YW", "ZL", "ZS", "AB", "BN", "CG", "CX", "CZ", "D6", "DR", "DZ", "OH",
+        "TB", "TC", "VB", "WI", "4W", "AG", "AY", "DA", "D2", "3D", "F2", "SI",
+        "HP", "EV", "MG", "GU", "SA", "VP", "A2", "WC"
+    };
+    
+    // Banjo-Tooie B7 -> set to sram 'cause crk converts ek16->sram
+    int saveTypes[] = {
+        2, 1, 5, 1, 3, 1, 1, 3, 3, 3, 3, 3, 3, 5, 3, 5, 3, 3, 3, 4, 5, 4, 4, 3,
+        3, 3, 3, 4, 3, 3, 4, 3, 3, 1, 3, 3, 3, 3, 3, 3, 5, 5, 3, 3, 3, 3, 1, 3,
+        5, 3, 3, 3, 5, 4, 1, 3, 3, 3, 5, 3, 3, 4, 3, 4, 3, 3, 4, 4, 1, 5, 5, 4,
+        5, 3, 5, 5, 5, 5, 3, 3, 1, 1, 3, 4, 3, 3, 3, 3, 5, 3, 3, 3, 5, 1, 3, 3,
+        3, 3, 3, 3, 1, 5, 3, 3, 3, 1, 3, 4, 1, 1, 5, 3, 3, 3, 3, 4, 1, 3, 1, 3,
+        3, 3, 1, 1, 3, 3, 1, 1, 4, 4, 4, 5, 3, 4, 3, 3, 3, 1, 1, 3
+    };
+
+    //bt cic to 2 pos6 was 5
+    int cicTypes[] = {
+        2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2, 2, 6, 5, 5, 5, 2,
+        2, 3, 2, 2, 2, 2, 5, 2, 1, 6, 2, 2, 2, 2, 2, 2, 5, 5, 2, 2, 3, 2, 3, 2,
+        3, 2, 2, 2, 2, 2, 2, 2, 5, 2, 3, 2, 2, 2, 2, 3, 2, 2, 3, 3, 2, 3, 3, 5,
+        3, 2, 3, 2, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 6, 2, 5, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+    };
+
+int get_cic_save(char *cartid, int *cic, int *save) {
+    // variables
+    int NUM_CARTS = 137;
+    int i = 0;
+
+    printf("Starting search...\n");
+    // search for cartid
+    for (i=0; i<NUM_CARTS; i++) {
+        if (strcmp(cartid, cartIDs[i]) == 0) {
+            printf("Found! %d", i);
+            break;
+        }
+        printf("%d ", i);
+    }
+    printf("\ni=%d\n", i);
+
+    if (i == NUM_CARTS) {
+        // cart not in list
+        *cic = 2;
+        *save = 0;
+        return 0; // not found
+    }
+
+    // cart found
+    *cic = cicTypes[i];
+    *save = saveTypes[i];
+
+    return 1; // found
+}
+
+
 void load_selected_rom() {
     printf("Loading '%s'...\n", sd_selected_rom_title);
     load_new_rom(sd_selected_rom_title);
@@ -392,29 +453,18 @@ void load_new_rom(char* filename) {
 	fr = f_stat(filename, &filinfo);
 	printf("%s [size=%llu]\n", filinfo.fname, filinfo.fsize);
 
-    // TODO read the file header and lookup the eeprom save size
-    // printf("Sending eeprom type to mcu1\n");
-    // uart_tx_program_putc(COMMAND_START);
-    // uart_tx_program_putc(COMMAND_START2);
-    // uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
-    // uart_tx_program_putc(0);
-    // uart_tx_program_putc(2);
-    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
-    // uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
-
-    // // Busy wait for a few cycles then send eeprom data
-    // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
-
-    // load_eeprom_from_sd();
-
-    // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
-
     int currentPSRAMChip = START_ROM_LOAD_CHIP_INDEX;
-    qspi_enable_spi(8, currentPSRAMChip);
+    qspi_enable_spi(4, currentPSRAMChip);
+
+    // Variables to track cic and save type
+    int gameCic = 0;
+    int saveType = 0;
+    char* midValues = "GE";
 
     printf("Writing to psram...\n");
 	int len = 0;
 	int total = 0;
+    bool isFirstRead = true;
 	uint64_t t0 = to_us_since_boot(get_absolute_time());
 	do {
         fr = f_read(&fil, buf, sizeof(buf), &len);
@@ -424,6 +474,51 @@ void load_new_rom(char* filename) {
         qspi_spi_write_buf(addr, buf, len);
 		
         total += len;
+
+        if (isFirstRead) {
+            isFirstRead = false;
+            printf("Rom serial: %c%c%c%c\n", buf[0x3B], buf[0x3C], buf[0x3D], buf[0x3E]);
+
+            midValues[0] = buf[0x3C];
+            midValues[1] = buf[0x3D];
+
+            int cartFound = get_cic_save(midValues, &gameCic, &saveType);
+
+            printf("CIC: %d, saveType: %d\n", gameCic, saveType);
+            printf("Sending eeprom info to mcu1...\n");
+
+            uart_tx_program_putc(COMMAND_START);
+            uart_tx_program_putc(COMMAND_START2);
+            uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
+            uart_tx_program_putc(0);
+            uart_tx_program_putc(2);
+            
+            if(saveType == 3) {
+                eeprom_type = EEPROM_TYPE_4K;
+                uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
+                uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K));
+            } else if (saveType == 4) {
+                eeprom_type = EEPROM_TYPE_16K;
+                uart_tx_program_putc((uint8_t)(EEPROM_TYPE_16K >> 8));
+                uart_tx_program_putc((uint8_t)(EEPROM_TYPE_16K));
+            } else {
+                // Don't use eeprom
+                eeprom_type = 0;
+                uart_tx_program_putc(0);
+                uart_tx_program_putc(0);
+            }
+
+            // TODO Figure out why file loading isn't working
+            // if (saveType == 3 || saveType == 4) {
+            //     // Busy wait for a few cycles then send eeprom data
+            //     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
+
+            //     // Send the eeprom save data
+            //     load_eeprom_from_sd();
+
+            //     for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
+            // }
+        }
 
         int newChip = psram_addr_to_chip(total);
         if (newChip != currentPSRAMChip && newChip <= MAX_MEMORY_ARRAY_CHIP_INDEX) {
@@ -699,7 +794,7 @@ void save_eeprom_to_sd() {
     printf("Saving eeprom data...\n");
     // Open or create file for currently loaded rom
     char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
-    sprintf(eepromSaveFilename, "%s.eep", sd_selected_rom_title, ".eep");
+    sprintf(eepromSaveFilename, "ddr_firmware/n64/eeprom/%s.eep", sd_selected_rom_title);
 
     FIL eepromFile;
     FRESULT fr = f_open(&eepromFile, eepromSaveFilename, FA_CREATE_ALWAYS | FA_WRITE);
@@ -727,7 +822,9 @@ void load_eeprom_from_sd() {
 
     // Open or create file for currently loaded rom
     char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
-    sprintf(eepromSaveFilename, "%s.eep", sd_selected_rom_title, ".eep");
+    sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", sd_selected_rom_title);
+
+    printf("Trying to open '%s'\n", eepromSaveFilename);
 
     FIL eepromFile;
     FRESULT fr = f_open(&eepromFile, eepromSaveFilename, FA_READ);
@@ -738,12 +835,14 @@ void load_eeprom_from_sd() {
     }
 
     uint16_t numBytesToSend = eeprom_type == EEPROM_TYPE_4K ? 512 : 2048;
+    printf("EEPROM is %u bytes\n", numBytesToSend);
     uint8_t* buf = (uint8_t*)pc64_uart_tx_buf;
     uint numRead = 0;
     f_read(&eepromFile, buf, numBytesToSend, &numRead);
     f_close(&eepromFile);
     if (numRead != numBytesToSend) {
         printf("Error reading eeprom. Read %d but expected %u\n", numRead, numBytesToSend);
+        stdio_flush();
     }
     free(eepromSaveFilename);
 
@@ -762,6 +861,7 @@ void load_eeprom_from_sd() {
     }
 
     printf("Finshed sending EEPROM data.\n");
+    stdio_flush();
 }
 
 BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE];

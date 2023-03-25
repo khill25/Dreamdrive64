@@ -19,6 +19,12 @@ volatile uint8_t eeprom[2048]; // sized to fit the 16K eeprom
 #define COMMAND_BACKUP_EEPROM  (0xBE)
 // Send eeprom data to mcu2
 void sendEepromData() {
+
+    // Don't send data if there is eeprom
+    if (eeprom_type == 0) {
+        return;
+    }
+
     uint8_t backupCommand; 
     uint16_t numBytesToSend;
 
@@ -215,6 +221,11 @@ void __time_critical_func(processJoybus)(int dataPin) {
 }
 
 void enable_joybus() {
+    if (eeprom_type == 0) {
+        printf("No eeprom type, not enabling joybus\n");
+        return;
+    }
+    
     printf("Enabling joybus\n");
     processJoybus(21); // on pin 21
 }

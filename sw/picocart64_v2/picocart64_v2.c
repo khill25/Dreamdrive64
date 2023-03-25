@@ -57,10 +57,6 @@ void vApplicationGetTimerTaskMemory(StaticTask_t ** ppxTimerTaskTCBBuffer, Stack
 
 int main(void)
 {
-	// gpio_init(15);
-	// gpio_set_dir(15, true);
-	// gpio_put(15, 1);
-
 	// const int freq_khz = 133000;
 	// const int freq_khz = 133000;
 	// const int freq_khz = 180000;
@@ -71,13 +67,14 @@ int main(void)
 	// const int freq_khz = 240000;
 	// const int freq_khz = 250000;
 	// const int freq_khz = 266000;
-	// vreg_set_voltage(VREG_VOLTAGE_1_15); // doubtful this is needed.
 
-	// const int freq_khz = 336000;
-	const int freq_khz = 360000;
-	// const int freq_khz = 380000;
-	// const int freq_khz = 480000;
+	// Frequencies above 266MHz require extra voltage, or at least did with all the units I tested
+	const int freq_khz = 336000; // Boots and runs games with a 4x qspi divider
+	// const int freq_khz = 360000; // Boots and runs games (at stock sdk speeds!) with a 4x qspi divider
+	// const int freq_khz = 380000; // Boots and may run games with a 4x qspi divider
+	// const int freq_khz = 480000; // Does not boot?
 	vreg_set_voltage(VREG_VOLTAGE_1_25);
+	// vreg_set_voltage(VREG_VOLTAGE_1_15);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	// On MCU1, PIN_ID is pulled low externally.

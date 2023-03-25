@@ -155,40 +155,40 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		false           
 	);
 
-	sram_dma_chan = dma_claim_unused_channel(true);
-	dma_channel_config sram_dma_config = dma_channel_get_default_config(sram_dma_chan);
-	channel_config_set_transfer_data_size(&sram_dma_config, DMA_SIZE_16);
-	channel_config_set_read_increment(&sram_dma_config, true);
-	channel_config_set_write_increment(&sram_dma_config, false);
-	// channel_config_set_bswap(&c, true);
-	// channel_config_set_high_priority(&c, true);
+	// sram_dma_chan = dma_claim_unused_channel(true);
+	// dma_channel_config sram_dma_config = dma_channel_get_default_config(sram_dma_chan);
+	// channel_config_set_transfer_data_size(&sram_dma_config, DMA_SIZE_16);
+	// channel_config_set_read_increment(&sram_dma_config, true);
+	// channel_config_set_write_increment(&sram_dma_config, false);
+	// // channel_config_set_bswap(&c, true);
+	// // channel_config_set_high_priority(&c, true);
 
-	dma_channel_configure(
-		sram_dma_chan,        // Channel to be configured
-		&sram_dma_config,              // The configuration we just created
-		&sram_dma_buffer,       // The initial write address //&pio0->txf[0]
-		sram,           // The initial read address
-		1, 				 // Number of transfers;
-		false           
-	);
+	// dma_channel_configure(
+	// 	sram_dma_chan,        // Channel to be configured
+	// 	&sram_dma_config,              // The configuration we just created
+	// 	&sram_dma_buffer,       // The initial write address //&pio0->txf[0]
+	// 	sram,           // The initial read address
+	// 	1, 				 // Number of transfers;
+	// 	false           
+	// );
 
-	sram_dma_write_chan = dma_claim_unused_channel(true);
-	dma_channel_config sram_dma_write_config = dma_channel_get_default_config(sram_dma_write_chan);
-	channel_config_set_transfer_data_size(&sram_dma_write_config, DMA_SIZE_16);
-	channel_config_set_read_increment(&sram_dma_write_config, false);
-	channel_config_set_write_increment(&sram_dma_write_config, true);
+	// sram_dma_write_chan = dma_claim_unused_channel(true);
+	// dma_channel_config sram_dma_write_config = dma_channel_get_default_config(sram_dma_write_chan);
+	// channel_config_set_transfer_data_size(&sram_dma_write_config, DMA_SIZE_16);
+	// channel_config_set_read_increment(&sram_dma_write_config, false);
+	// channel_config_set_write_increment(&sram_dma_write_config, true);
 
-	dma_channel_configure(
-		sram_dma_write_chan,     // Channel to be configured
-		&sram_dma_write_config,  // The configuration we just created
-		sram,      				 // The initial write address //&pio0->txf[0]
-		&sram_dma_buffer, 		// The initial read address
-		1, 				 		// Number of transfers;
-		false           
-	);
+	// dma_channel_configure(
+	// 	sram_dma_write_chan,     // Channel to be configured
+	// 	&sram_dma_write_config,  // The configuration we just created
+	// 	sram,      				 // The initial write address //&pio0->txf[0]
+	// 	&sram_dma_buffer, 		// The initial read address
+	// 	1, 				 		// Number of transfers;
+	// 	false           
+	// );
 
-	uint32_t sram_dma_trigger = 1u << sram_dma_chan;
-	uint32_t sram_dma_write_trigger = 1u << sram_dma_write_chan;
+	// uint32_t sram_dma_trigger = 1u << sram_dma_chan;
+	// uint32_t sram_dma_write_trigger = 1u << sram_dma_write_chan;
 
 	// array_test_method();
 
@@ -234,7 +234,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
 			// next_word = 0x3040; // boots @ 266
-			// next_word = 0x2040; // Should boot with rp2040's @ 360MHz (qspi at 90MHz)
+			next_word = 0x2040; // Should boot with rp2040's @ 360MHz (qspi at 90MHz)
 			// next_word = 0x1940;
 			// next_word = 0x1840;
 			// next_word = 0x1740;
@@ -242,7 +242,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x1540;
 			// next_word = 0x1440;
 			// next_word = 0x1340;
-			next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
+			// next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
 		
 			addr = n64_pi_get_value(pio);
 
