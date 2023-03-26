@@ -34,7 +34,7 @@
 
 extern bool g_isMCU1;
 
-#define QSPI_QUAD_MODE_CLK_DIVIDER 2 // rp2040@266MHz = 133MHz psram clk
+#define QSPI_QUAD_MODE_CLK_DIVIDER 4 // rp2040@266MHz = 133MHz psram clk
 
 #define LOG_BUFFER_SIZE 2048
 extern uint32_t log_buffer[LOG_BUFFER_SIZE]; // store addresses

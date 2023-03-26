@@ -637,8 +637,8 @@ void qspi_init_qspi() {
             (SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_2C2A  // Command and address both in serial format
                     << SSI_SPI_CTRLR0_TRANS_TYPE_LSB);
 
-	// ssi->rx_sample_dly = 3;
-    ssi->rx_sample_dly = 2;
+	ssi->rx_sample_dly = 3;
+    // ssi->rx_sample_dly = 2;
     // ssi->rx_sample_dly = 1;
     ssi->ssienr = 1;
 }
