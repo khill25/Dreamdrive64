@@ -59,6 +59,8 @@ int main(void)
 {
 	// const int freq_khz = 133000;
 	// const int freq_khz = 133000;
+	// const int freq_khz = 140000;
+	// const int freq_khz = 160000;
 	// const int freq_khz = 180000;
 	// const int freq_khz = 200000;
 	// const int freq_khz = 210000;
@@ -75,7 +77,7 @@ int main(void)
 	// const int freq_khz = 360000; // Boots and runs games (at stock sdk speeds!) with a 4x qspi divider
 	// const int freq_khz = 380000; // Boots and may run games with a 4x qspi divider
 	// const int freq_khz = 480000; // Does not boot?
-	// vreg_set_voltage(VREG_VOLTAGE_1_25);
+	vreg_set_voltage(VREG_VOLTAGE_1_25);
 	// vreg_set_voltage(VREG_VOLTAGE_1_15);
 	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 

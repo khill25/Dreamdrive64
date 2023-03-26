@@ -142,19 +142,19 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	// channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 	channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
 	channel_config_set_read_increment(&c, true);
-	// channel_config_set_write_increment(&c, false);
-	channel_config_set_write_increment(&c, true);
+	channel_config_set_write_increment(&c, false);
+	// channel_config_set_write_increment(&c, true);
 	channel_config_set_bswap(&c, true);
 	channel_config_set_high_priority(&c, true);
 
-	// volatile uint16_t dmaValue = 0;
+	volatile uint16_t dmaValue = 0;
 	// uint16_t* dmaBuffer;
 	// dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
 		&c,              // The configuration we just created
-		// &dmaValue,
-		pc64_uart_tx_buf,      // The initial write address
+		&dmaValue,
+		// pc64_uart_tx_buf,      // The initial write address
 		ptr16,           // The initial read address
 		1, 				 // Number of transfers;
 		false           
@@ -255,11 +255,17 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			pio_sm_put(pio, 0, next_word);
 			last_addr += 2;
 
+			// next_word = 0x3340; // 140/2
+			// next_word = 0x2740; // 160/2
+			// next_word = 0x2240; // 180/2
+			// next_word = 0x1C40; // 210/2
+			next_word = 0x1C40; // 300/4
+
 			// Patch bus speed here if needed 
 			// next_word = 0xFF40; // Slowest speed
 			// next_word = 0x8040; // boots @ 266MHz
 			// next_word = 0x4040; // boots @ 266
-			// next_word = 0x3040; // boots @ 266
+			// next_word = 0x3040; // boots @ 266 
 			// next_word = 0x2040; // Should boot with rp2040's @ 360MHz (qspi at 90MHz)
 			// next_word = 0x1B40; 
 			
@@ -270,7 +276,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x1940; 
 			// next_word = 0x1840;
 			// next_word = 0x1740;
-			next_word = 0x1640; // boots @ 300 (psram divider = 4)
+			// next_word = 0x1640; // boots @ 300 (psram divider = 4)
 			// next_word = 0x1540;
 			// next_word = 0x1440;
 			// next_word = 0x1340;
@@ -278,15 +284,19 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 		
 			addr = n64_pi_get_value(pio);
 
+			
+
 			// Assume addr == 0, i.e. push 16 bits of data
 			pio_sm_put(pio, 0, next_word);
 			last_addr += 2;
-
+			
 			// If we are loading data from psram, use dma, otherwise just use the array in flash.
 			// if (g_loadRomFromMemoryArray) {
 				// dma_channel_set_read_addr(dma_chan, ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1), false);
+			
 			(&dma_hw->ch[dma_chan])->al3_read_addr_trig = (uintptr_t)(ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1));
 			while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); }
+			next_word = dmaValue;
 			dma_hw->multi_channel_trigger = 1u << dma_chan;
 			// } else {
 			// 	uint32_t chunk_index = rom_mapping[(last_addr & 0xFFFFFF) >> COMPRESSION_SHIFT_AMOUNT];
@@ -348,21 +358,22 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// Domain 1, Address 2 Cartridge ROM
 
 			// Change the banked memory chip if needed
-			tempChip = psram_addr_to_chip(last_addr);
+			tempChip = ((last_addr >> 23) & 0x7) + 1;// psram_addr_to_chip(last_addr);
 			if (tempChip != g_currentMemoryArrayChip) {
 				g_currentMemoryArrayChip = tempChip;
 				// Set the new chip
 				psram_set_cs(g_currentMemoryArrayChip);
 			}
 
-			dma_bi = 0;// reset the buffer index
 			// Set the correct read address
 			(&dma_hw->ch[dma_chan])->read_addr = (uintptr_t)(ptr16 + (((last_addr - g_addressModifierTable[g_currentMemoryArrayChip]) & 0xFFFFFF) >> 1));
-			(&dma_hw->ch[dma_chan])->al2_write_addr_trig = (uintptr_t) pc64_uart_tx_buf;
-			while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
-			dma_hw->multi_channel_trigger = 1u << dma_chan;
-
+			dma_hw->multi_channel_trigger = 1u << dma_chan; //dma_channel_start(dma_chan);
+			
 			do {	
+				
+				while(!!(dma_hw->ch[dma_chan].al1_ctrl & DMA_CH0_CTRL_TRIG_BUSY_BITS)) { tight_loop_contents(); } // dma_channel_wait_for_finish_blocking(dma_chan);
+				next_word = dmaValue;
+				// dma_hw->multi_channel_trigger = 1u << dma_chan; // fetch here for faster processor/lower qspi
 				
 				while((pio->fstat & 0x100) != 0) tight_loop_contents();
 				addr = pio->rxf[0];
@@ -370,9 +381,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				if (addr == 0) {
 					// READ
  handle_d1a2_read:
- 					pio->txf[0] = pc64_uart_tx_buf[dma_bi++];
-					dma_hw->multi_channel_trigger = 1u << dma_chan;
+ 					pio->txf[0] = next_word;
 					last_addr += 2;
+					dma_hw->multi_channel_trigger = 1u << dma_chan; // fetch here for slower processor speed/faster qspi
 
 				} else if (addr & 0x00000001) {
 					// WRITE
