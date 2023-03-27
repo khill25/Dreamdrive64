@@ -125,31 +125,20 @@ void __time_critical_func(processJoybus)(int dataPin) {
     
     bool resetStateChanged = false;
     bool lastResetState = false;
-    uint32_t waitTime = (1 * 60 * 1000000); 
+    uint32_t waitTime = (1 * 1000000);//(1 * 60 * 1000000); 
     uint32_t startTime = time_us_32();
     volatile uint8_t buffer[3] = {0};
-    volatile int lastInt1State = 1;
+    volatile bool hasSentJoybusInfo = false;
     while (true) {
         if(pio_sm_is_rx_fifo_empty(pio, 0)) {
             uint32_t now = time_us_32();
             uint32_t diff = now - startTime;
-            // check the state of the reset line, save if the user hit reset
-            // Or write the state every 1 minute
             
-            // Int1 is the pin that changes when reset is pressed
-            if (lastInt1State != gpio_get(22) || (diff > waitTime)) {
-                lastInt1State = gpio_get(22);
-                printf("Dumping eeprom. Start-time: %u, now: %u, diff: %u\n", startTime, now, diff);
+            // If the joybus has already sent the info, this is likely the first load
+            // or a reset, but appears to happen during game play, at least in goldeneye.
+            if (hasSentJoybusInfo && diff > waitTime) {
                 startTime = now;
-
-                // Dump eeprom
-                // for(int i = 0; i < 512; i++) {
-                //     if (i % 8 == 0) {
-                //         printf("\n%04x: ", i);
-                //     }
-                //     printf("%02x ", eeprom[i]);
-                // }
-                // Save eeprom to sd card
+                hasSentJoybusInfo = false;
                 sendEepromData();
             }
             continue; // don't process loop
@@ -158,8 +147,9 @@ void __time_critical_func(processJoybus)(int dataPin) {
         }
 
         if (buffer[0] == 0) { // INFO
-            uint8_t probeResponse[3] = {0x00, eeprom_type};// { 0x00, 0x80, 0x00 };
-            // uint8_t probeResponse[3] = { 0x00, 0xC0, 0x00 };
+            hasSentJoybusInfo = true;
+            startTime = time_us_32();
+            uint8_t probeResponse[3] = {0x00, eeprom_type};
             uint32_t result[2];
             int resultLen;
             convertToPio(probeResponse, 3, result, &resultLen);

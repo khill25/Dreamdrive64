@@ -27,7 +27,6 @@ extern volatile uint32_t verifyDataTime;
 extern volatile int selected_rom_save_type;
 extern volatile int selected_rom_cic;
 extern volatile int selected_rom_cic_region;
-extern volatile bool update_n64_cic; // Set when the cic needs to be updated after a rom change
 
 // UART TX buffer
 extern volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];

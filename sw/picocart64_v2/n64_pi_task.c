@@ -28,6 +28,7 @@
 #include "stdio_async_uart.h"
 #include "utils.h"
 
+#include "qspi_helper.h"
 #include "sdcard/internal_sd_card.h"
 #include "psram.h"
 #include "rom.h"
@@ -45,10 +46,7 @@ volatile int dma_chan = -1;
 volatile int dma_chan_high = -1;
 volatile int sram_dma_chan = -1;
 volatile int sram_dma_write_chan = -1;
-// volatile uint16_t *dmaBuffer;
-// volatile uint16_t *dmaBufferHigh;
 volatile uint16_t dma_bi = 0;
-// volatile uint16_t sram_dma_buffer;
 
 uint16_t rom_mapping[MAPPING_TABLE_LEN];
 
@@ -107,24 +105,8 @@ static inline uint32_t n64_pi_get_value(PIO pio)
 	return value;
 }
 
-void __no_inline_not_in_flash_func(array_test_method)(void) {
-	volatile uint32_t sramValue = 0;
-	volatile uint32_t sramAddr = 0;
-	volatile uint16_t* sramPtr = (volatile uint16_t* )sram;
-	uint32_t st = time_us_32();
-	for(volatile int i = 0; i < 1000000; i++) {
-		// sramValue = sram[((sramAddr & SRAM_SIZE_MASK) | ((sramAddr & 0xC0000) >> 3)) >> 1];
-		// sramValue = 0;//*(sramPtr + sramAddr);//sram[sramAddr];
-	}
-	uint32_t tt = time_us_32() - st;
-	printf("%uus \n", tt);
-}
-
 void __no_inline_not_in_flash_func(n64_pi_run)(void)
 {
-	systick_hw->csr = 0x5;
-    systick_hw->rvr = 0x00FFFFFF;
-
 	// Probably already restarted or first time start, we want to run the loop
 	// until this is true, so always reset it
 	g_restart_pi_handler = false;
@@ -145,21 +127,11 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	channel_config_set_bswap(&c, true);
 	channel_config_set_high_priority(&c, true);
 
-	// When trying to use a 32 bit value
-	// channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-	// channel_config_set_write_increment(&c, true);
-	// also need to disable byte swap
-
-	// Might be faster to use a uint16_t rather than an array?
-	// uint16_t* dmaBuffer;
-	// dmaBuffer = malloc(sizeof(uint32_t) * 4); // 4 16 bit values
-
 	volatile uint16_t dmaValue = 0;
 	dma_channel_configure(
 		dma_chan,        // Channel to be configured
 		&c,              // The configuration we just created
 		&dmaValue,
-		// pc64_uart_tx_buf,      // The initial write address
 		ptr16,           // The initial read address
 		1, 				 // Number of transfers;
 		false           
@@ -175,6 +147,19 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 	volatile uint32_t next_word;
 	volatile uint32_t startTicks = 0;
 	volatile uint32_t sram_addr = 0;
+
+	// Was attempting to figure out a way to go back to the menu rom
+	// if the user hits reset... This doesn't work.
+	// Was doing this from the address=0x10000000 block.
+	// volatile bool wasRunningFromPSRAM = false;
+	// if (!wasRunningFromPSRAM && g_loadRomFromMemoryArray) {
+	// 	wasRunningFromPSRAM = true;
+	// } else if (wasRunningFromPSRAM && g_loadRomFromMemoryArray) {
+	// 	wasRunningFromPSRAM = false;
+	// 	g_loadRomFromMemoryArray = false;
+	// 	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
+	// 	qspi_enable_flash(4);
+	// }
 	
 	// Read addr manually before the loop
 	addr = n64_pi_get_value(pio);
@@ -241,10 +226,8 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			// next_word = 0x1440;
 			// next_word = 0x1340;
 			// next_word = 0x1240; // Only usable if psram/flash is readable at 133MHz
-		
-			addr = n64_pi_get_value(pio);
 
-			
+			addr = n64_pi_get_value(pio);
 
 			// Assume addr == 0, i.e. push 16 bits of data
 			pio_sm_put(pio, 0, next_word);
@@ -352,7 +335,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					// READ
  handle_d1a2_read:
  					pio->txf[0] = next_word;
-					// printf("(%08x)%04x ", last_addr, next_word);
 					last_addr += 2;
 					// dma_hw->multi_channel_trigger = 1u << dma_chan; // fetch here for slower processor speed/faster qspi
 

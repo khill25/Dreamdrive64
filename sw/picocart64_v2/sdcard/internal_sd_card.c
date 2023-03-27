@@ -73,7 +73,6 @@ volatile uint32_t selected_rom_metadata_register;
 volatile int selected_rom_save_type = 0;    // Default to no save type
 volatile int selected_rom_cic = 2;          // 6102
 volatile int selected_rom_cic_region = -1;  // Default
-volatile bool update_n64_cic = false;       // Set when the cic needs to be updated after a rom change
 
 // Variables used for signalling sd data send 
 volatile bool waitingForRomLoad = false;
@@ -385,8 +384,6 @@ void extract_metadata_and_send_save_info(char* buf, FIL* fil) {
 
     int saveType = selected_rom_metadata_register & 0x000000FF;
     selected_rom_cic = selected_rom_metadata_register >> 16;
-
-    update_n64_cic = true; 
 
     printf("meta register: %08x\n", selected_rom_metadata_register);
     printf("CIC: %d, saveType: %d, country: %c\n", selected_rom_cic, saveType, buf[0x3E]);

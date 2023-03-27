@@ -177,13 +177,6 @@ void main_task_entry(__unused void *params)
 			start_eeprom_sd_save();
 		}
 
-		if(update_n64_cic) {
-			printf("Updating n64_cic... %u, %d\n", selected_rom_cic, selected_rom_cic_region);
-			update_n64_cic = false;
-			// loaded_cicType = selected_rom_cic;
-			// loaded_cic_is_pal = selected_rom_cic_region;
-		}
-
 		if (is_verifying_rom_data_from_mcu1) {
 			is_verifying_rom_data_from_mcu1 = false;
 			mcu2_verify_sent_rom_data();
