@@ -128,11 +128,17 @@ void __time_critical_func(processJoybus)(int dataPin) {
     uint32_t waitTime = (1 * 60 * 1000000); 
     uint32_t startTime = time_us_32();
     volatile uint8_t buffer[3] = {0};
+    volatile int lastInt1State = 1;
     while (true) {
         if(pio_sm_is_rx_fifo_empty(pio, 0)) {
             uint32_t now = time_us_32();
             uint32_t diff = now - startTime;
-            if (diff > waitTime) {
+            // check the state of the reset line, save if the user hit reset
+            // Or write the state every 1 minute
+            
+            // Int1 is the pin that changes when reset is pressed
+            if (lastInt1State != gpio_get(22) || (diff > waitTime)) {
+                lastInt1State = gpio_get(22);
                 printf("Dumping eeprom. Start-time: %u, now: %u, diff: %u\n", startTime, now, diff);
                 startTime = now;
 
@@ -144,7 +150,7 @@ void __time_critical_func(processJoybus)(int dataPin) {
                 //     printf("%02x ", eeprom[i]);
                 // }
                 // Save eeprom to sd card
-                // sendEepromData();
+                sendEepromData();
             }
             continue; // don't process loop
         } else {
@@ -152,7 +158,7 @@ void __time_critical_func(processJoybus)(int dataPin) {
         }
 
         if (buffer[0] == 0) { // INFO
-            uint8_t probeResponse[3] = { 0x00, 0x80, 0x00 };
+            uint8_t probeResponse[3] = {0x00, eeprom_type};// { 0x00, 0x80, 0x00 };
             // uint8_t probeResponse[3] = { 0x00, 0xC0, 0x00 };
             uint32_t result[2];
             int resultLen;

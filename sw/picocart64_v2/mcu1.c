@@ -19,7 +19,7 @@
 #include "pins_mcu1.h"
 #include "n64_pi_task.h"
 #include "reset_reason.h"
-#include "sha256.h"
+// #include "sha256.h"
 
 #include "stdio_async_uart.h"
 
@@ -190,7 +190,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 			// Joybus currently runs in a while loop. 
 			// Running the joybus means that other code here
 			// will not run once joybus is started.
-			// enable_joybus(); 
+			enable_joybus(); 
 		}
 
 		// This would typically be used with test load code after a rom has been loaded
@@ -430,7 +430,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// Enable STDIO, typically disabled on mcu1 as the uart pin is being used
 	// for serial comms to mcu2.
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
-	stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
+	// stdio_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
 
 	// printf("\n\nMCU1: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 

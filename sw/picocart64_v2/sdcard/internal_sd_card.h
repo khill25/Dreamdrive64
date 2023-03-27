@@ -24,6 +24,10 @@ extern volatile bool start_saveEeepromData;
 extern volatile bool start_loadEeepromData;
 extern volatile bool is_verifying_rom_data_from_mcu1;
 extern volatile uint32_t verifyDataTime;
+extern volatile int selected_rom_save_type;
+extern volatile int selected_rom_cic;
+extern volatile int selected_rom_cic_region;
+extern volatile bool update_n64_cic; // Set when the cic needs to be updated after a rom change
 
 // UART TX buffer
 extern volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
@@ -41,6 +45,8 @@ void pc64_set_sd_rom_selection_length_register(uint32_t value, int index);
 
 // Set selected rom title, max 256 characters
 void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len);
+
+void pc64_set_rom_meta_data(uint32_t value, int index);
 
 void pc64_send_sd_read_command(void);
 
@@ -66,8 +72,7 @@ void load_rom(const char *filename);
 void pc64_send_load_new_rom_command();
 void load_new_rom(char* filename);
 
-void save_eeprom_to_sd();
-void load_eeprom_from_sd();
+void start_eeprom_sd_save();
 
 void test_read_psram(const char* filename);
 

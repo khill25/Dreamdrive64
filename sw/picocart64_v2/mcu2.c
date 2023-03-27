@@ -174,7 +174,14 @@ void main_task_entry(__unused void *params)
 
 		if (start_saveEeepromData) {
 			start_saveEeepromData = false;
-			save_eeprom_to_sd();
+			start_eeprom_sd_save();
+		}
+
+		if(update_n64_cic) {
+			printf("Updating n64_cic... %u, %d\n", selected_rom_cic, selected_rom_cic_region);
+			update_n64_cic = false;
+			// loaded_cicType = selected_rom_cic;
+			// loaded_cic_is_pal = selected_rom_cic_region;
 		}
 
 		if (is_verifying_rom_data_from_mcu1) {
@@ -186,6 +193,17 @@ void main_task_entry(__unused void *params)
 				verifyDataTime = time_us_32();
 			}
 		}
+
+		// NMI is pulses when the reset button is pressed.
+		// Doesn't appear to toggle state until the button is released?
+		// if (gpio_get(PIN_N64_NMI) != lastNMIState && justForcedCICReset == false) {
+		// 	bool nowNMIState = gpio_get(PIN_N64_NMI);
+		// 	printf("NMI changed state. Was: %d, now: %d\n", lastNMIState, nowNMIState);
+		// 	lastNMIState = nowNMIState;
+		// 	// Reset the cic with updated info
+		// 	force_restart_cic = true;
+		// 	justForcedCICReset = true;
+		// }
 
 		// Tick every second
 		if(time_us_32() - t > 1000000) {
@@ -200,6 +218,10 @@ void main_task_entry(__unused void *params)
 			// if (t2 == 2) {
 			// 	printf("Starting inter_mcu_comms test...\n");
 			// 	inter_mcu_comms_test();
+			// }
+
+			// if (t2 % 10 == 0 && t2 != 0) {
+			// 	justForcedCICReset = false;
 			// }
 		}
 	}

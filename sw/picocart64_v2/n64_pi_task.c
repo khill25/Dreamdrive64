@@ -576,6 +576,13 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 						multicore_fifo_push_blocking(CORE1_LOAD_NEW_ROM_CMD);
 						break;
 
+					case (PC64_REGISTER_SELECTED_ROM_META):
+						pc64_set_rom_meta_data(write_word, 0);
+						break;
+					case (PC64_REGISTER_SELECTED_ROM_META + 2):
+						pc64_set_rom_meta_data(write_word >> 16, 1);
+						break;
+
 					default:
 						break;
 					}

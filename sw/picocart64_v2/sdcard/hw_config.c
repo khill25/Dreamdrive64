@@ -47,6 +47,7 @@ DAT2               6
 // selects.
 static spi_t spis[] = {			// One for each SPI.
 	{
+		
 	 .hw_inst = spi0,			// SPI component
 	 .miso_gpio = PIN_SD_DAT0_UART1_TX,
 	 .mosi_gpio = PIN_SD_CMD,
@@ -74,6 +75,14 @@ static sd_card_t sd_cards[] = {	// One for each SD card
 	//  .set_drive_strength = true,
 	//  .ss_gpio_drive_strength = GPIO_DRIVE_STRENGTH_2MA,
 	 //.use_card_detect = false,        
+
+	// .type=SD_IF_SPI,
+	// .spi_if = {
+	// 	.spi = &spis[0],
+	// 	.ss_gpio = PIN_SD_DAT3
+	// },
+	
+
 	.type = SD_IF_SDIO,
 	.sdio_if = {
 		.CMD_gpio=PIN_SD_CMD,
@@ -110,7 +119,13 @@ sd_card_t *sd_get_by_num(size_t num) {
 }
 // These need to be defined for the API even if SPI is not used:
 size_t spi_get_num() { return 0; }
-spi_t *spi_get_by_num(size_t num) { return NULL; }
+spi_t *spi_get_by_num(size_t num) { 
+	if (num <= sd_get_num()) {
+		return &spis[num];
+	} else {
+		return NULL;
+	}
+}
 
 
 /* ********************************************************************** */

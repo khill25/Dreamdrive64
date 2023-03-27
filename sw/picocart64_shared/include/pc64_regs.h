@@ -59,8 +59,8 @@
 #define PC64_REGISTER_SD_SELECT_ROM (PC64_REGISTER_SD_READ_NUM_SECTORS + 0x4)
 
 // TODO implement these registers
-// [WRITE] Register to define the cic type. Menu rom will write to this register
-#define PC64_REGISTER_SELECTED_ROM_CIC (PC64_REGISTER_SD_SELECT_ROM + 0x4)
+// [WRITE] Register to define the cic type and save type.
+// 0xFF00 == Cic
+// 0x00FF == save
+#define PC64_REGISTER_SELECTED_ROM_META (PC64_REGISTER_SD_SELECT_ROM + 0x4)
 
-// [WRITE] Register to define the save type. Menu rom will write to this register
-#define PC64_REGISTER_SELECTED_ROM_SAVE_TYPE (PC64_REGISTER_SELECTED_ROM_CIC + 0x4)

@@ -208,7 +208,22 @@ void loadRomAtSelection(int selection) {
 
     // TODO this will only load roms from the root of the SD Card....
     char* fileToLoad = malloc(sizeof(char*) * 256);
-    sprintf(fileToLoad, "%s", g_current_dir_entries[selection]->filename);
+    char* temp = malloc(sizeof(char*) * 256);
+    if (g_current_directory_breadcrumb_index) {
+        for(int i = 0; i < g_current_directory_breadcrumb_index; i++) {
+            if (i == 0) {
+                sprintf(fileToLoad, "/%s", g_directory_breadcumb[i]);
+            } else {
+                sprintf(temp, "%s", fileToLoad);
+                sprintf(fileToLoad, "/%s/%s", temp, g_directory_breadcumb[i]);
+            }
+        }
+        sprintf(temp, "%s", fileToLoad);
+        sprintf(fileToLoad, "%s/%s", temp, g_current_dir_entries[selection]->filename);
+    } else {
+        sprintf(fileToLoad, "%s", g_current_dir_entries[selection]->filename);
+    }
+    free(temp);
 
     char* prefixedFilename = malloc(256);
     sprintf(prefixedFilename, "sd:/%s", fileToLoad);
@@ -221,6 +236,15 @@ void loadRomAtSelection(int selection) {
     midValues[0] = g_selectedRomSerial[1];
     midValues[1] = g_selectedRomSerial[2];
     get_cic_save(midValues, &gameCic, &saveType);
+
+    // g_selectedRomSerial[3] == country code
+
+    uint32_t metadata = (gameCic << 16) | (saveType);
+    printf("metadata: %08x\n", metadata);
+    io_write(PC64_CIBASE_ADDRESS_START + PC64_REGISTER_SELECTED_ROM_META, metadata);
+    wait_ms(3);
+    // TODO Figure out or ask user which region the game is from
+    // so we can set force_tv if needed.
 
     // TODO also send this info to the cart. If power is still applied it will
     // be able to restart the game with the correct cic value
@@ -788,7 +812,7 @@ void update_spinner( int ovfl ) {
     }
 }
 
-// Go up a directory to this directories parent folder
+// Go up a directory to this directory's parent folder
 void go_up() {
     if (g_current_directory_breadcrumb_index == 0) {
         if (!g_isRenderingMenu) {

@@ -710,6 +710,15 @@ int get_cic_save(char *cartid, int *cic, int *save) {
 #define RAM_SIZE_1  *(vu32 *)0x80000318
 #define RAM_SIZE_2  *(vu32 *)0x800003F0
 
+short int force_tv = 0;
+#if !defined(MIN)
+    #define MIN(a, b) ({ \
+        __typeof__ (a) _a = (a); \
+        __typeof__ (b) _b = (b); \
+        _a < _b ? _a : _b; \
+    })
+#endif
+
 // void simulate_boot(u32 cic_chip, u8 gBootCic, u32 *cheat_lists[2])
 void simulate_boot(u32 cic_chip, u8 gBootCic) {
     short int gCheats = 0;
@@ -733,7 +742,8 @@ void simulate_boot(u32 cic_chip, u8 gBootCic) {
     vu32 *ram_size = (cic_chip == CIC_6105) ? &RAM_SIZE_2 : &RAM_SIZE_1;
     *ram_size = (gBootCic == CIC_6105) ? RAM_SIZE_2 : RAM_SIZE_1;
 
-    // if (force_tv) {
+    
+    if (force_tv) {
     //     /*
     //      * This magic bit-twiddling is required to retain backward compatibility
     //      * with old ini files. It converts alt64's tv mode to N64's tv mode:
@@ -748,8 +758,8 @@ void simulate_boot(u32 cic_chip, u8 gBootCic) {
     //      *   2: M-PAL
     //      *   3: Unused
     //      */
-    //     TV_TYPE = MIN((~force_tv - 1) & 3, 2);
-    // }
+        TV_TYPE = MIN((~force_tv - 1) & 3, 2);
+    }
 
     // if (gCheats) {
     //     // Copy patcher into a memory location where it will not be overwritten

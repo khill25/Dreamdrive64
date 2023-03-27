@@ -168,7 +168,8 @@ typedef uint64_t sim_u64;
 #define FRAM_STATUS_REG	0xA8000000
 #define FRAM_COMMAND_REG 0xA8010000
 
-
+// For setting which region the game is in
+extern short int force_tv;
 
 //void romFill(...);
 void pif_boot();
