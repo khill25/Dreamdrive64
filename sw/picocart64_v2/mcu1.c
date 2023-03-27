@@ -156,7 +156,7 @@ uint16_t rom_read_test(int dma_chan) {
 
 uint32_t last_rom_cache_update_address = 0;
 void __no_inline_not_in_flash_func(mcu1_core1_entry)() {	
-	// pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
+	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
 	// pio_uart_stop(false, true); // disable rx?
 
 	bool readingData = false;
@@ -165,7 +165,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 
 	// Some debug and test variables
 	volatile bool hasInit = false;
-	volatile bool test_load = true;
+	volatile bool test_load = false;
 	volatile uint32_t t = 0;
 	volatile uint32_t it = 0;
 	volatile uint32_t t2 = 0;

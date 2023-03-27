@@ -267,10 +267,10 @@ void qspi_enable_flash(int clk_divider) {
 
 	ssi_hw->ssienr = 0;
 	ssi_hw->baudr = clk_divider; // change baud
-    ssi->rx_sample_dly = 4;
-    // ssi->rx_sample_dly = 3;
-    // ssi->rx_sample_dly = 2;
-    // ssi->rx_sample_dly = 0;
+    // ssi->rx_sample_dly = 4;  // 300-360
+    // ssi->rx_sample_dly = 3;  // ??
+    ssi->rx_sample_dly = 2;  // 266
+    // ssi->rx_sample_dly = 0;  // ??
 	ssi_hw->ssienr = 1;
 }
 

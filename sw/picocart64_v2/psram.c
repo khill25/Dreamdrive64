@@ -52,12 +52,13 @@ inline uint8_t psram_addr_to_chip(uint32_t address)
 // 1-8: Assert the specific PSRAM CS (1 indexed, matches U1, U2 ... U8)
 inline void psram_set_cs(uint8_t chip)
 {
-	uint32_t mask = 0x07800000;//(1 << current_mcu_demux_pin_ie) | (1 << current_mcu_demux_pin_0) | (1 << current_mcu_demux_pin_1) | (1 << current_mcu_demux_pin_2);
+	// 0x07800000
+	uint32_t mask = (1 << current_mcu_demux_pin_ie) | (1 << current_mcu_demux_pin_0) | (1 << current_mcu_demux_pin_1) | (1 << current_mcu_demux_pin_2);
 	uint32_t new_mask;
 
 	if (chip >= 1 && chip <= 8) {
 		chip--;					// convert to 0-indexed
-		new_mask = 0x04000000 | (chip << current_mcu_demux_pin_0);//(1 << current_mcu_demux_pin_ie) | (chip << current_mcu_demux_pin_0);
+		new_mask = (1 << current_mcu_demux_pin_ie) | (chip << current_mcu_demux_pin_0); //0x04000000 | (chip << current_mcu_demux_pin_0);
 	} else {
 		// Set PIN_DEMUX_IE = 0 to pull all PSRAM CS-lines high
 		new_mask = 0;
