@@ -7,6 +7,8 @@
 #include "pio_uart.h"
 #include "pins_mcu1.h"
 
+#include "pico/stdlib.h"
+
 pio_uart_inst_t uart_rx = {
         .pio = pio1,
         .sm = 0 //joybus and rx both share the same state machine. Disable rx before starting joybus
@@ -117,4 +119,17 @@ bool uart_rx_program_is_readable() {
 bool uart_tx_program_is_writable() {
     if (!isUartTXRunning) { return false; }
     return !pio_sm_is_tx_fifo_full(uart_tx.pio, uart_tx.sm);
+}
+
+void inter_mcu_comms_test() {
+    int testSize = 1023;// * 1024 * 1; // 1MB
+    uint32_t startTime = time_us_32();
+    for(int i = 0; i < testSize; i++) {
+        while(!uart_tx_program_is_writable()) { tight_loop_contents(); }
+        uart_tx_program_putc(i);
+    }
+    uint32_t totalTime = time_us_32() - startTime;
+    float totalSeconds = (((float)totalTime) / 1000.0f / 1000.0f);
+    float mbs = (1.0f / 1024.0f) / (totalSeconds);
+    printf("Sent 1MB in %dus, %dms, %fMB/s\n", totalTime, totalTime / 1000, mbs);
 }

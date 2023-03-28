@@ -15,7 +15,7 @@ typedef struct pio_uart_inst {
     uint sm;
 } pio_uart_inst_t;
 
-#define RX_RING_BUFFER_SIZE 512
+#define RX_RING_BUFFER_SIZE 1024//512
 typedef struct RXRingBuffer_t {                                                                  
     uint8_t  buf[RX_RING_BUFFER_SIZE];                                                
     uint32_t head;                                                   
@@ -38,5 +38,7 @@ void uart_tx_program_puts(const char *s);
 char uart_rx_program_getc();
 bool uart_rx_program_is_readable();
 bool uart_tx_program_is_writable();
+
+void inter_mcu_comms_test();
 
 #endif

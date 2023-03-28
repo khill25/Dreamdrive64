@@ -9,6 +9,7 @@
 #include "pico/stdlib.h"
 #include "hardware/structs/ssi.h"
 #include "hardware/structs/ioqspi.h"
+#include "hardware/vreg.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -19,11 +20,11 @@
 
 #include "sdcard/internal_sd_card.h"
 
-#include "flash_array.h"
-
 #define PIN_ID    (26)
 #define MCU1_ID   ( 1)
 #define MCU2_ID   ( 2)
+
+bool g_isMCU1 = false;
 
 /*
  * PicoCart64 v2 is connected in the following way:
@@ -56,6 +57,30 @@ void vApplicationGetTimerTaskMemory(StaticTask_t ** ppxTimerTaskTCBBuffer, Stack
 
 int main(void)
 {
+	// const int freq_khz = 133000;
+	// const int freq_khz = 133000;
+	// const int freq_khz = 140000;
+	// const int freq_khz = 160000;
+	// const int freq_khz = 180000;
+	// const int freq_khz = 200000;
+	// const int freq_khz = 210000;
+	// const int freq_khz = 220000;
+	// const int freq_khz = 230000;
+	// const int freq_khz = 240000;
+	// const int freq_khz = 250000;
+	const int freq_khz = 266000;
+
+	// Frequencies above 266MHz require extra voltage, or at least did with all the units I tested
+	// const int freq_khz = 300000; 
+	// const int freq_khz = 300000; 
+	// const int freq_khz = 336000; // Boots and runs games with a 4x qspi divider
+	// const int freq_khz = 360000; // Boots and runs games (at stock sdk speeds!) with a 4x qspi divider
+	// const int freq_khz = 380000; // Boots and may run games with a 4x qspi divider
+	// const int freq_khz = 480000; // Does not boot?
+	// vreg_set_voltage(VREG_VOLTAGE_1_25);
+	// vreg_set_voltage(VREG_VOLTAGE_1_15);
+	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
+
 	// On MCU1, PIN_ID is pulled low externally.
 	// On MCU2, PIN_ID is pulled high externally and connected to MCU1.RUN.
 	gpio_init(PIN_ID);
@@ -66,19 +91,19 @@ int main(void)
 	int mcu_id = gpio_get(PIN_ID) + 1;
 	PC64_MCU_ID = mcu_id;
 
-	// Copy the boot loader
-	picocart_boot2_copy();
-
-	// // Turn off SSI
-	ssi_hw->ssienr = 0;
-
-	// // Disable output enable (OE) on all QSPI IO pins
-	qspi_oeover_disable();
-
 	if (mcu_id == MCU1_ID) {
+		g_isMCU1 = true;
+
 		mcu1_main();
 	} else if (mcu_id == MCU2_ID) {
-		// It's up to MCU2 to let MCU1 boot
+		g_isMCU1 = false;
+
+		// Turn off SSI
+		ssi_hw->ssienr = 0;
+		// Disable output enable (OE) on all QSPI IO pins
+		qspi_oeover_disable();
+		
+		// It's up to MCU2 to let MCU1 boot 
 		mcu2_main();
 	}
 	// Never reached

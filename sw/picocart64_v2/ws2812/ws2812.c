@@ -5,6 +5,7 @@
  */
 
 #include <stdint.h>
+#include "pico/time.h"
 
 #include "ws2812.h"
 #include "hardware/pio.h"
@@ -15,6 +16,7 @@ static struct {
 	bool initialized;
 	PIO pio;
 	uint8_t gpio;
+	uint offset;
 } self;
 
 static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
@@ -34,6 +36,7 @@ void ws2812_init(PIO pio, uint8_t gpio)
 	self.pio = pio;
 	self.gpio = gpio;
 	self.initialized = true;
+	self.offset = offset;
 }
 
 void ws2812_write_rgb(uint8_t r, uint8_t g, uint8_t b)
@@ -43,4 +46,9 @@ void ws2812_write_rgb(uint8_t r, uint8_t g, uint8_t b)
 	}
 
 	pio_sm_put_blocking(self.pio, 0, urgb_u32(r, g, b));
+}
+
+void ws2812_release_pio() {
+	pio_remove_program(self.pio, &ws2812_program, self.offset);
+	self.initialized = false;
 }

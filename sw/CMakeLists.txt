@@ -20,6 +20,14 @@ endif()
 # Copy program to ram during boot
 set(PICO_COPY_TO_RAM 1)
 
+# add_compile_options(
+#         -Wall
+#         -save-temps
+#         -Wno-unused-function # we have some for the docs that aren't called
+#         -Wno-maybe-uninitialized
+#         -O2
+# )
+
 # Initialize the SDK
 pico_sdk_init()
 
@@ -27,7 +35,7 @@ pico_sdk_init()
 add_subdirectory(lib/freertos-kernel/portable/ThirdParty/GCC/RP2040 FreeRTOS-Kernel)
 
 # Include 3rd party SDCard implementation
-add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/FatFs_SPI)
+add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/src)
 
 # Add shared code
 add_subdirectory(n64_cic)
@@ -36,13 +44,6 @@ add_subdirectory(stdio_async_uart)
 add_subdirectory(picocart64_shared)
 
 # Add applications
-add_subdirectory(picocart64_v1)
+# add_subdirectory(picocart64_v1)
 add_subdirectory(picocart64_v2)
 #add_subdirectory(dualpico)
-
-add_compile_options(
-        -Wall
-        -save-temps
-        -Wno-unused-function # we have some for the docs that aren't called
-        -Wno-maybe-uninitialized
-)

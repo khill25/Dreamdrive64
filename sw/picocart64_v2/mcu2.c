@@ -13,25 +13,24 @@
 #include "hardware/structs/ioqspi.h"
 #include "hardware/clocks.h"
 #include "hardware/structs/systick.h"
+#include "hardware/vreg.h"
 
 #include "FreeRTOS.h"
 #include "task.h"
 
-#include "esp32_task.h"
+// #include "esp32_task.h"
 #include "n64_cic.h"
 #include "git_info.h"
-#include "led_task.h"
+// #include "led_task.h"
 #include "reset_reason.h"
 #include "pins_mcu2.h"
 #include "utils.h"
-#include "qspi_helper.h"
 #include "gpio_helper.h"
 
 #include "sdcard/internal_sd_card.h"
 #include "pio_uart/pio_uart.h"
 #include "psram.h"
-#include "flash_array/flash_array.h"
-#include "flash_array/program_flash_array.h"
+#include "qspi_helper.h"
 
 #include "ff.h"
 #include <string.h>
@@ -104,16 +103,29 @@ static const gpio_config_t mcu2_gpio_config[] = {
 	{PIN_SPI1_CS, GPIO_IN, false, false, false, GPIO_DRIVE_STRENGTH_4MA, GPIO_FUNC_PIO1},
 };
 
-#define NEED_LOAD_ROM 1
 void main_task_entry(__unused void *params)
 {
 	int count = 0;
 	printf("MCU2 Main Entry\n");
 
 	// Make sure that ssi hardware is disabled before starting mcu1
-    ssi_hw->ssienr = 0;
-	qspi_oeover_disable();
+	// qspi_disable();
+	// ssi_hw->ssienr = 0;
+	// qspi_oeover_disable();
 
+	// test_read_psram("Resident Evil 2 (USA) (Rev 1).z64");
+	// test_read_psram("Pokemon Stadium 2 (USA).z64");
+	// test_read_psram("GoldenEye 007 (U) [!].z64");
+
+	// load_new_rom("GoldenEye 007 (U) [!].z64");
+	// load_new_rom("Donkey Kong 64 (U) [!].z64");
+	// load_new_rom("Legend of Zelda, The - Majora's Mask (U) [!].z64");
+	// load_new_rom("Perfect Dark (U) (V1.1) [!].z64");
+	// load_new_rom("Resident Evil 2 (USA) (Rev 1).z64");
+	// load_new_rom("Pokemon Stadium 2 (USA).z64");
+	// load_new_rom("1080[en,jp].z64");
+	// load_new_rom("Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64");
+	
 	vTaskDelay(100);
 	printf("Booting MCU1...\n");
 	gpio_put(PIN_MCU1_RUN, 1);
@@ -127,6 +139,8 @@ void main_task_entry(__unused void *params)
 	pio_uart_init(PIN_SPI1_CS, PIN_SPI1_RX);
 	printf("Finshed!\n");
 
+	// mcu2_setup_verify_rom_data(); // opens the file into some global variables
+
 	// Random test stuff, leave in for now as still heavily debugging
 	// vTaskDelay(5000);
 	//pc64_load_new_rom_command("Doom 64 (USA) (Rev 1).z64");
@@ -134,9 +148,13 @@ void main_task_entry(__unused void *params)
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
 	// load_new_rom("Super Mario 64 (USA).z64");
 
+	printf("Starting main MCU2 loop\n");
+
 	volatile uint32_t t = 0;
 	volatile uint32_t t2 = 0;
 	uint32_t totalBytesSinceLastPeriod = 0;
+	bool isFirstVerifyDataLoop = true;
+	
 	while (true) {
 		tight_loop_contents();
 
@@ -156,8 +174,29 @@ void main_task_entry(__unused void *params)
 
 		if (start_saveEeepromData) {
 			start_saveEeepromData = false;
-			save_eeprom_to_sd();
+			start_eeprom_sd_save();
 		}
+
+		if (is_verifying_rom_data_from_mcu1) {
+			is_verifying_rom_data_from_mcu1 = false;
+			mcu2_verify_sent_rom_data();
+
+			if (isFirstVerifyDataLoop) {
+				isFirstVerifyDataLoop = false;
+				verifyDataTime = time_us_32();
+			}
+		}
+
+		// NMI is pulses when the reset button is pressed.
+		// Doesn't appear to toggle state until the button is released?
+		// if (gpio_get(PIN_N64_NMI) != lastNMIState && justForcedCICReset == false) {
+		// 	bool nowNMIState = gpio_get(PIN_N64_NMI);
+		// 	printf("NMI changed state. Was: %d, now: %d\n", lastNMIState, nowNMIState);
+		// 	lastNMIState = nowNMIState;
+		// 	// Reset the cic with updated info
+		// 	force_restart_cic = true;
+		// 	justForcedCICReset = true;
+		// }
 
 		// Tick every second
 		if(time_us_32() - t > 1000000) {
@@ -168,16 +207,16 @@ void main_task_entry(__unused void *params)
 			// 	uint32_t kBps = (uint32_t) ((float)(totalDataInLastPeriod / 1024.0f) / (float)(totalTimeOfSendData_ms / 1000.0f));
     		// 	printf("Sent %d bytes in %d ms (%d kB/s)\n", totalDataInLastPeriod, totalTimeOfSendData_ms, kBps);
 			// }
-		}
 
-#if 0
-		printf("----------------------------------------\n");
-		printf("MCU 2 [i=%d]\n", count);
-		printf("Stack usage main_task: %d bytes\n", MAIN_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark(NULL));
-		printf("Stack usage led_task: %d bytes\n", LED_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark((TaskHandle_t) & led_task));
-		printf("Stack usage esp32_task: %d bytes\n", ESP32_TASK_STACK_SIZE - uxTaskGetStackHighWaterMark((TaskHandle_t) & esp32_task));
-		printf("----------------------------------------\n\n");
-#endif
+			// if (t2 == 2) {
+			// 	printf("Starting inter_mcu_comms test...\n");
+			// 	inter_mcu_comms_test();
+			// }
+
+			// if (t2 % 10 == 0 && t2 != 0) {
+			// 	justForcedCICReset = false;
+			// }
+		}
 	}
 }
 
@@ -200,7 +239,7 @@ void mcu2_core1_entry(void)
 void vLaunch(void)
 {
 	xTaskCreateStatic(main_task_entry, "Main", MAIN_TASK_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, main_task_stack, &main_task);
-	xTaskCreateStatic(led_task_entry, "LED", LED_TASK_STACK_SIZE, NULL, LED_TASK_PRIORITY, led_task_stack, &led_task);
+	// xTaskCreateStatic(led_task_entry, "LED", LED_TASK_STACK_SIZE, NULL, LED_TASK_PRIORITY, led_task_stack, &led_task);
 	// Disable the esp32 right now to avoid adding any additional variables to debug
 	//xTaskCreateStatic(esp32_task_entry, "ESP32", ESP32_TASK_STACK_SIZE, NULL, ESP32_TASK_PRIORITY, esp32_task_stack, &esp32_task);
 
@@ -213,17 +252,23 @@ void mcu2_main(void)
 	// const int freq_khz = 133000;
 	// const int freq_khz = 166000;
 	// const int freq_khz = 200000;
+	// const int freq_khz = 210000;
 	// const int freq_khz = 250000;
-	const int freq_khz = 266000;
+	// const int freq_khz = 266000;
 	// NOTE: For speeds above 266MHz voltage must be increased.
 	// const int freq_khz = 300000;
+	// const int freq_khz = 332000;
+	// const int freq_khz = 360000;
+	// const int freq_khz = 384000;
+	// const int freq_khz = 400000;
 
 	// IMPORTANT: For the serial comms between mcus to work properly 
 	// both mcus must be run at the same clk speed or have the pio divder set accordingly
 
 	// Note that this might call set_sys_clock_pll,
 	// which might set clk_peri to 48 MHz
-	bool clockWasSet = set_sys_clock_khz(freq_khz, false);
+	// vreg_set_voltage(VREG_VOLTAGE_1_25);
+	// bool clockWasSet = set_sys_clock_khz(freq_khz, false);
 
 	// Init async UART on pin 0/1
 	// stdio_async_uart_init_full(DEBUG_UART, DEBUG_UART_BAUD_RATE, DEBUG_UART_TX_PIN, DEBUG_UART_RX_PIN);
@@ -232,17 +277,17 @@ void mcu2_main(void)
 
 	set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
 
-	printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
+	// printf("MCU2: Was%s able to set clock to %d MHz\n", clockWasSet ? "" : " not", freq_khz/1000);
 
 	// Enable a 12MHz clock output on GPIO21 / clk_gpout0
 	clock_gpio_init(PIN_MCU2_GPIO21, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_XOSC_CLKSRC, 1);
 
-	printf("\n\n----------------------------------------\n");
-	printf("PicoCart64 MCU2 Boot (git rev %08x)\r\n", GIT_REV);
-	printf("Reset reason: 0x%08lX\n", get_reset_reason());
-	printf("clk_sys: %d Hz\n", clock_get_hz(clk_sys));
-	printf("clk_peri: %d Hz\n", clock_get_hz(clk_peri));
-	printf("----------------------------------------\n\n");
+	// printf("\n\n----------------------------------------\n");
+	// printf("PicoCart64 MCU2 Boot (git rev %08x)\r\n", GIT_REV);
+	// printf("Reset reason: 0x%08lX\n", get_reset_reason());
+	// printf("clk_sys: %d Hz\n", clock_get_hz(clk_sys));
+	// printf("clk_peri: %d Hz\n", clock_get_hz(clk_peri));
+	// printf("----------------------------------------\n\n");
 
 	// for (int fkhz = 125000; fkhz < 400000;) {
 	// 	uint vco, postdiv1, postdiv2;
@@ -269,6 +314,10 @@ void mcu2_main(void)
 	// }
 
 	// printf("\n\n");
+
+	// gpio_init(PIN_DEMUX_A0);
+	// gpio_set_dir(PIN_DEMUX_A0, true);
+	// gpio_put(PIN_DEMUX_A0, 1);
 
 	multicore_launch_core1(mcu2_core1_entry);
 

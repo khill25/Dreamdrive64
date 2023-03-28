@@ -168,7 +168,8 @@ typedef uint64_t sim_u64;
 #define FRAM_STATUS_REG	0xA8000000
 #define FRAM_COMMAND_REG 0xA8010000
 
-
+// For setting which region the game is in
+extern short int force_tv;
 
 //void romFill(...);
 void pif_boot();
@@ -176,8 +177,10 @@ void pif_boot();
 int is_valid_rom(unsigned char *buffer);
 void swap_header(unsigned char* header, int loadlength);
 
-u8 getCicType(u8 bios_cic);
+int get_cic_save(char *cartid, int *cic, int *save);
 
-void simulate_boot(u32 cic_chip);
+// u8 getCicType(u8 bios_cic);
+
+void simulate_boot(u32 cic_chip, u8 gBootCic);
 
 #endif

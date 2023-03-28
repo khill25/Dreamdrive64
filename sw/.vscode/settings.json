@@ -24,7 +24,17 @@
         "cstdlib": "c",
         "pio_uart.pio.h": "c",
         "joybus.pio.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "pins_mcu2.h": "c",
+        "ssi.h": "c",
+        "stdio.h": "c",
+        "io_qspi.h": "c",
+        "compare": "c",
+        "rtc.h": "c",
+        "reset_reason.h": "c",
+        "gpio_helper.h": "c",
+        "qspi_helper.h": "c",
+        "n64_cic.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

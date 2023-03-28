@@ -21,7 +21,7 @@
 // Capcity of the nor flash chips soldered to the board
 #define FLASH_CHIP_CAPACITY_BYTES (16 * 1024 * 1024)
 // Starting chip index(U?) of the chip where a rom is first loaded
-#define START_ROM_LOAD_CHIP_INDEX (3)
+#define START_ROM_LOAD_CHIP_INDEX (1)
 // Starting index of first flash chip used to store rom data
 #define FLASH_CHIP_INDEX (7)
 

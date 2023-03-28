@@ -11,7 +11,7 @@
 
 #include "pio_uart/pio_uart.h"
 
-volatile uint16_t eeprom_type = EEPROM_TYPE_4K; // default to 4K eeprom
+volatile uint16_t eeprom_type = EEPROM_TYPE_16K; // default to 4K eeprom
 volatile uint8_t eeprom[2048]; // sized to fit the 16K eeprom
 
 #define COMMAND_START    0xDE
@@ -19,6 +19,12 @@ volatile uint8_t eeprom[2048]; // sized to fit the 16K eeprom
 #define COMMAND_BACKUP_EEPROM  (0xBE)
 // Send eeprom data to mcu2
 void sendEepromData() {
+
+    // Don't send data if there is eeprom
+    if (eeprom_type == 0) {
+        return;
+    }
+
     uint8_t backupCommand; 
     uint16_t numBytesToSend;
 
@@ -119,25 +125,20 @@ void __time_critical_func(processJoybus)(int dataPin) {
     
     bool resetStateChanged = false;
     bool lastResetState = false;
-    uint32_t waitTime = (1 * 60 * 1000000); 
+    uint32_t waitTime = (1 * 1000000);//(1 * 60 * 1000000); 
     uint32_t startTime = time_us_32();
     volatile uint8_t buffer[3] = {0};
+    volatile bool hasSentJoybusInfo = false;
     while (true) {
         if(pio_sm_is_rx_fifo_empty(pio, 0)) {
             uint32_t now = time_us_32();
             uint32_t diff = now - startTime;
-            if (diff > waitTime) {
-                printf("Dumping eeprom. Start-time: %u, now: %u, diff: %u\n", startTime, now, diff);
+            
+            // If the joybus has already sent the info, this is likely the first load
+            // or a reset, but appears to happen during game play, at least in goldeneye.
+            if (hasSentJoybusInfo && diff > waitTime) {
                 startTime = now;
-
-                // Dump eeprom
-                // for(int i = 0; i < 512; i++) {
-                //     if (i % 8 == 0) {
-                //         printf("\n%04x: ", i);
-                //     }
-                //     printf("%02x ", eeprom[i]);
-                // }
-                // Save eeprom to sd card
+                hasSentJoybusInfo = false;
                 sendEepromData();
             }
             continue; // don't process loop
@@ -146,8 +147,9 @@ void __time_critical_func(processJoybus)(int dataPin) {
         }
 
         if (buffer[0] == 0) { // INFO
-            uint8_t probeResponse[3] = { 0x00, 0x80, 0x00 };
-            // uint8_t probeResponse[3] = { 0x00, 0xC0, 0x00 };
+            hasSentJoybusInfo = true;
+            startTime = time_us_32();
+            uint8_t probeResponse[3] = {0x00, eeprom_type};
             uint32_t result[2];
             int resultLen;
             convertToPio(probeResponse, 3, result, &resultLen);
@@ -200,7 +202,6 @@ void __time_critical_func(processJoybus)(int dataPin) {
             pio_sm_set_enabled(pio, 0, true);
 
             for (int i = 0; i<resultLen; i++) pio_sm_put_blocking(pio, 0, result[i]);
-
             
         }
         else {
@@ -216,6 +217,11 @@ void __time_critical_func(processJoybus)(int dataPin) {
 }
 
 void enable_joybus() {
+    if (eeprom_type == 0) {
+        printf("No eeprom type, not enabling joybus\n");
+        return;
+    }
+    
     printf("Enabling joybus\n");
     processJoybus(21); // on pin 21
 }
