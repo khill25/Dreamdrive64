@@ -10,9 +10,9 @@
 #include <stdlib.h>
 #include <libdragon.h>
 #include <usb.h>
-// #include "fatfs/ff.h"
-// #include "fatfs/ffconf.h"
-// #include "fatfs/diskio.h"
+#include "fatfs/ff.h"
+#include "fatfs/ffconf.h"
+#include "fatfs/diskio.h"
 
 #include "git_info.h"
 #include "shell.h"
