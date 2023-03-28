@@ -22,12 +22,12 @@ endif
 
 C_SOURCES = \
 	$(wildcard *.c) \
-	$(wildcard ../../picocart64_shared/*.c)
+	$(wildcard ../../dreamdrive64_shared/*.c)
 
 C_INCLUDES = \
 	-I$(ROOTDIR)/mips64-elf/include \
 	-I$(BUILD_DIR) \
-	-I../../picocart64_shared/include \
+	-I../../dreamdrive64_shared/include \
 
 OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
 vpath %.c $(sort $(dir $(C_SOURCES)))
@@ -35,7 +35,6 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 ASFLAGS = -mtune=vr4300 -march=vr4300
 CFLAGS = -std=gnu99 -march=vr4300 -mtune=vr4300 -Wall $(C_INCLUDES)
 LDFLAGS = -L$(ROOTDIR)/mips64-elf/lib -ldragon -lc -lm -ldragonsys -Tn64.ld --gc-sections
-#N64TOOLFLAGS = -l 1536K -h $(ROOTDIR)/mips64-elf/lib/header -t "PicoCart64 Test ROM"
 N64TOOLFLAGS = -h $(ROOTDIR)/mips64-elf/lib/header -t "DREAMDrive64 Menu"
 
 all: $(BUILD_DIR)/$(PROG_NAME).z64

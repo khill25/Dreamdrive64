@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2023 Kaili Hill
  */
 
 #include "n64_pi.h"
@@ -17,7 +18,7 @@
 #include "n64_defs.h"
 #include "n64_pi.h"
 #include "pc64_rand.h"
-#include "pc64_regs.h"
+#include "ddr64_regs.h"
 #include "picocart64_pins.h"
 #include "ringbuf.h"
 #include "sram.h"
@@ -39,7 +40,7 @@ static const uint16_t *rom_file_16 = (uint16_t *) rom_chunks;
 RINGBUF_CREATE(ringbuf, 64, uint32_t);
 
 // UART TX buffer
-static uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
+static uint16_t ddr64_uart_tx_buf[DDR64_BASE_ADDRESS_LENGTH];
 
 static inline uint32_t resolve_sram_address(uint32_t address)
 {
@@ -249,11 +250,11 @@ void n64_pi_run(void)
 			} while (1);
 		}
 #endif
-		else if (last_addr >= PC64_BASE_ADDRESS_START && last_addr <= PC64_BASE_ADDRESS_END) {
+		else if (last_addr >= DDR64_BASE_ADDRESS_START && last_addr <= DDR64_BASE_ADDRESS_END) {
 			// PicoCart64 BASE address space
 			do {
 				// Pre-fetch from the address
-				next_word = pc64_uart_tx_buf[(last_addr & (sizeof(pc64_uart_tx_buf) - 1)) >> 1];
+				next_word = ddr64_uart_tx_buf[(last_addr & (sizeof(ddr64_uart_tx_buf) - 1)) >> 1];
 
 				// Read command/address
 				addr = n64_pi_get_value(pio);
@@ -261,19 +262,19 @@ void n64_pi_run(void)
 				if (addr & 0x00000001) {
 					// We got a WRITE
 					// 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-					pc64_uart_tx_buf[(last_addr & (sizeof(pc64_uart_tx_buf) - 1)) >> 1] = swap8(addr >> 16);
+					ddr64_uart_tx_buf[(last_addr & (sizeof(ddr64_uart_tx_buf) - 1)) >> 1] = swap8(addr >> 16);
 					last_addr += 2;
 				} else if (addr == 0) {
 					// READ
 					pio_sm_put(pio, 0, next_word);
 					last_addr += 2;
-					next_word = pc64_uart_tx_buf[(last_addr & (sizeof(pc64_uart_tx_buf) - 1)) >> 1];
+					next_word = ddr64_uart_tx_buf[(last_addr & (sizeof(ddr64_uart_tx_buf) - 1)) >> 1];
 				} else {
 					// New address
 					break;
 				}
 			} while (1);
-		} else if (last_addr >= PC64_RAND_ADDRESS_START && last_addr <= PC64_RAND_ADDRESS_END) {
+		} else if (last_addr >= DDR64_RAND_ADDRESS_START && last_addr <= DDR64_RAND_ADDRESS_END) {
 			// PicoCart64 RAND address space
 			do {
 				// Read command/address
@@ -292,7 +293,7 @@ void n64_pi_run(void)
 					break;
 				}
 			} while (1);
-		} else if (last_addr >= PC64_CIBASE_ADDRESS_START && last_addr <= PC64_CIBASE_ADDRESS_END) {
+		} else if (last_addr >= DDR64_CIBASE_ADDRESS_START && last_addr <= DDR64_CIBASE_ADDRESS_END) {
 			// PicoCart64 CIBASE address space
 			do {
 				// Read command/address
@@ -300,9 +301,9 @@ void n64_pi_run(void)
 
 				if (addr == 0) {
 					// READ
-					switch (last_addr - PC64_CIBASE_ADDRESS_START) {
-					case PC64_REGISTER_MAGIC:
-						next_word = PC64_MAGIC;
+					switch (last_addr - DDR64_CIBASE_ADDRESS_START) {
+					case DDR64_REGISTER_MAGIC:
+						next_word = DDR64_MAGIC;
 						break;
 					default:
 						next_word = 0;
@@ -328,11 +329,11 @@ void n64_pi_run(void)
 					uint32_t write_word = addr & 0xFFFF0000;
 					write_word |= n64_pi_get_value(pio) >> 16;
 
-					switch (last_addr - PC64_CIBASE_ADDRESS_START) {
-					case PC64_REGISTER_UART_TX:
-						stdio_uart_out_chars((const char *)pc64_uart_tx_buf, write_word & (sizeof(pc64_uart_tx_buf) - 1));
+					switch (last_addr - DDR64_CIBASE_ADDRESS_START) {
+					case DDR64_REGISTER_UART_TX:
+						stdio_uart_out_chars((const char *)ddr64_uart_tx_buf, write_word & (sizeof(ddr64_uart_tx_buf) - 1));
 						break;
-					case PC64_REGISTER_RAND_SEED:
+					case DDR64_REGISTER_RAND_SEED:
 						pc64_rand_seed(write_word);
 						break;
 					default:

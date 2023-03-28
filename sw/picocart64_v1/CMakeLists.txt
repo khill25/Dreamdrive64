@@ -68,7 +68,7 @@ add_dependencies(picocart64_v1 update_git_info)
 target_link_libraries(picocart64_v1
     n64_cic
     n64_pi
-    picocart64_shared
+    dreamdrive64_shared
     pico_multicore
     pico_stdlib
     stdio_async_uart

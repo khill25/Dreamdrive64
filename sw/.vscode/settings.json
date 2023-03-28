@@ -34,7 +34,8 @@
         "reset_reason.h": "c",
         "gpio_helper.h": "c",
         "qspi_helper.h": "c",
-        "n64_cic.h": "c"
+        "n64_cic.h": "c",
+        "pc64_utils.h": "c"
     },
     "cmake.configureArgs": [
         "-DREGION=NTSC", 

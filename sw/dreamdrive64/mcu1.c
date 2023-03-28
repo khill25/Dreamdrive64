@@ -196,7 +196,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 		// This would typically be used with test load code after a rom has been loaded
 		// recompile with test_load off and rom should be ready to boot after a few seconds
 		// then power on the n64. Not for the faint of heart.
-		if (t2 == 2 && !hasInit && test_load) {
+		if (t2 == 1 && !hasInit && test_load) {
 			hasInit = true;
 			set_demux_mcu_variables(PIN_DEMUX_A0, PIN_DEMUX_A1, PIN_DEMUX_A2, PIN_DEMUX_IE);
 			uint currentChipIndex = START_ROM_LOAD_CHIP_INDEX;
@@ -279,7 +279,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					readingData = true;
 					rx_uart_buffer_reset();
 					
-					pc64_send_sd_read_command();
+					ddr64_send_sd_read_command();
 					break;
 
 				case CORE1_LOAD_NEW_ROM_CMD:
@@ -298,7 +298,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					// This will restart the loop.
 					g_restart_pi_handler = true;
 
-					pc64_send_load_new_rom_command();
+					ddr64_send_load_new_rom_command();
 
 					break;
 

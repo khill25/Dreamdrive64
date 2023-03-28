@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2022 Konrad Beckmann
+ * Copyright (c) 2022 Kaili Hill
  */
 
 #include <stdio.h>
@@ -27,7 +28,7 @@
 bool g_isMCU1 = false;
 
 /*
- * PicoCart64 v2 is connected in the following way:
+ * Dreamdrive64 is connected in the following way:
  * MCU1        - FLASH (+PSRAM) - MCU2
  * MCU1.GPIO26                  - 10k Pull Down
  * MCU2.GPIO26                  - 10k Pull Up
@@ -89,7 +90,7 @@ int main(void)
 
 	// mcu_id will be 1 for MCU1, and 2 for MCU2.
 	int mcu_id = gpio_get(PIN_ID) + 1;
-	PC64_MCU_ID = mcu_id;
+	DDR64_MCU_ID = mcu_id;
 
 	if (mcu_id == MCU1_ID) {
 		g_isMCU1 = true;

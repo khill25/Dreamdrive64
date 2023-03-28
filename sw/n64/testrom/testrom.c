@@ -13,11 +13,10 @@
 
 #include "git_info.h"
 
-// picocart64_shared
-#include "pc64_regs.h"
+#include "ddr64_regs.h"
 #include "pc64_rand.h"
 #include "n64_defs.h"
-#include "pc64_utils.h"
+#include "ddr64_utils.h"
 
 // static uint8_t pc64_sd_wait() {
 //     uint32_t timeout = 0;
@@ -27,9 +26,9 @@
 //     // Wait until the cartridge interface is ready
 //     do {
 //         // returns 1 while sd card is busy
-//         //pi_read_raw(read_buf, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_BUSY, sizeof(uint32_t))
+//         //pi_read_raw(read_buf, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_BUSY, sizeof(uint32_t))
 // 		data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-//         pi_read_raw(read_buf, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_BUSY, sizeof(uint16_t));
+//         pi_read_raw(read_buf, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_BUSY, sizeof(uint16_t));
         
 //         // Took too long, abort
 //         if((timeout++) > 10000000) {
@@ -55,30 +54,30 @@
 	
 // 	// send sector
 // 	data_cache_hit_writeback_invalidate(part0, sizeof(part0));
-// 	pi_write_raw(part0, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR0, sizeof(part0));
+// 	pi_write_raw(part0, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR0, sizeof(part0));
 	
 // 	data_cache_hit_writeback_invalidate(part1, sizeof(part1));
-// 	pi_write_raw(part1, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR1, sizeof(part1));
+// 	pi_write_raw(part1, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR1, sizeof(part1));
 	
 // 	data_cache_hit_writeback_invalidate(part2, sizeof(part2));
-// 	pi_write_raw(part2, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR2, sizeof(part2));
+// 	pi_write_raw(part2, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR2, sizeof(part2));
 	
 // 	data_cache_hit_writeback_invalidate(part3, sizeof(part3));
-// 	pi_write_raw(part3, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR3, sizeof(part3));
+// 	pi_write_raw(part3, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR3, sizeof(part3));
 
 // 	uint32_t buf2[] = { 1 };
 // 	data_cache_hit_writeback_invalidate(buf2, sizeof(buf2));
-// 	pi_write_raw(buf2, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_NUM_SECTORS, sizeof(buf2));
+// 	pi_write_raw(buf2, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_NUM_SECTORS, sizeof(buf2));
 
 // 	uint32_t buf3[] = { 1 };
 // 	data_cache_hit_writeback_invalidate(buf3, sizeof(buf3));
-// 	pi_write_raw(buf3, PC64_CIBASE_ADDRESS_START, PC64_COMMAND_SD_READ, sizeof(buf3));
+// 	pi_write_raw(buf3, DDR64_CIBASE_ADDRESS_START, DDR64_COMMAND_SD_READ, sizeof(buf3));
 
 // 	// wait for the sd card to finish
 // 	if(pc64_sd_wait() == 0) {
 // 		int dmaSize = 512;
 // 		data_cache_hit_writeback_invalidate(buff, dmaSize);
-// 		pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaSize);
+// 		pi_read_raw(buff, DDR64_BASE_ADDRESS_START, 0, dmaSize);
 
 // 		for (int k = 0; k < dmaSize; k++) {
 // 			if (k % 20 == 0 && k != 0) {
@@ -103,30 +102,30 @@
 	
 // 	// send sector
 // 	data_cache_hit_writeback_invalidate(part0, sizeof(part0));
-// 	pi_write_raw(part0, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR0, sizeof(part0));
+// 	pi_write_raw(part0, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR0, sizeof(part0));
 	
 // 	data_cache_hit_writeback_invalidate(part1, sizeof(part1));
-// 	pi_write_raw(part1, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR1, sizeof(part1));
+// 	pi_write_raw(part1, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR1, sizeof(part1));
 	
 // 	data_cache_hit_writeback_invalidate(part2, sizeof(part2));
-// 	pi_write_raw(part2, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR2, sizeof(part2));
+// 	pi_write_raw(part2, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR2, sizeof(part2));
 	
 // 	data_cache_hit_writeback_invalidate(part3, sizeof(part3));
-// 	pi_write_raw(part3, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_SECTOR3, sizeof(part3));
+// 	pi_write_raw(part3, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_SECTOR3, sizeof(part3));
 
 // 	uint32_t buf2[] = { 1 };
 // 	data_cache_hit_writeback_invalidate(buf2, sizeof(buf2));
-// 	pi_write_raw(buf2, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_READ_NUM_SECTORS, sizeof(buf2));
+// 	pi_write_raw(buf2, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_READ_NUM_SECTORS, sizeof(buf2));
 
 // 	uint32_t buf3[] = { 1 };
 // 	data_cache_hit_writeback_invalidate(buf3, sizeof(buf3));
-// 	pi_write_raw(buf3, PC64_CIBASE_ADDRESS_START, PC64_COMMAND_SD_READ, sizeof(buf3));
+// 	pi_write_raw(buf3, DDR64_CIBASE_ADDRESS_START, DDR64_COMMAND_SD_READ, sizeof(buf3));
 
 // 	// wait for the sd card to finish
 // 	if(pc64_sd_wait() == 0) {
 // 		printf("\nDMA size of(%ld) buff16\n", dmaReadSize);
 // 		data_cache_hit_writeback_invalidate(buff, dmaReadSize);
-// 		pi_read_raw(buff, PC64_BASE_ADDRESS_START, 0, dmaReadSize);
+// 		pi_read_raw(buff, DDR64_BASE_ADDRESS_START, 0, dmaReadSize);
 
 // 		// Should only need to loop over half the bytes because this is a 16bit buffer
 // 		for (int k = 0; k < dmaReadSize/2; k++) {
@@ -139,7 +138,7 @@
 
 // 		// printf("\nRead with dma\n");
 // 		// data_cache_hit_writeback_invalidate(buff, dmaReadSize * 4);
-// 		// dma_read_raw_async(buff, PC64_BASE_ADDRESS_START, dmaReadSize*4);
+// 		// dma_read_raw_async(buff, DDR64_BASE_ADDRESS_START, dmaReadSize*4);
 // 		// // dump the contents
 // 		// for (int k = 0; k < dmaReadSize; k++) {
 // 		// 	printf("%x ", buff[k]);
@@ -159,9 +158,9 @@
 //     // Wait until the cartridge interface is ready
 //     do {
 //         // returns 1 while sd card is busy
-//         //pi_read_raw(read_buf, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_BUSY, sizeof(uint32_t))
+//         //pi_read_raw(read_buf, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_BUSY, sizeof(uint32_t))
 // 		data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-//         pi_read_raw(read_buf, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_SD_BUSY, sizeof(uint16_t));
+//         pi_read_raw(read_buf, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_SD_BUSY, sizeof(uint16_t));
 
 // 		printf("SD_BUSY = %d\n", read_buf[0]);
 
@@ -202,8 +201,8 @@ int main(void)
 
 	// Verify PicoCart64 Magic
 	data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-	pi_read_raw(read_buf32, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_MAGIC, sizeof(uint32_t));
-	if (read_buf32[0] == PC64_MAGIC) {
+	pi_read_raw(read_buf32, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_MAGIC, sizeof(uint32_t));
+	if (read_buf32[0] == DDR64_MAGIC) {
 		printf("[ OK ] MAGIC = 0x%08lX.\n", read_buf32[0]);
 	} else {
 		printf("[FAIL] MAGIC = 0x%08lX.\n", read_buf32[0]);
@@ -273,7 +272,7 @@ int main(void)
 
 	// Stress test: Read pseudo-random numbers from PicoCart64 RAND address space
 	// Reset random seed
-	pi_write_u32(0, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_RAND_SEED);
+	pi_write_u32(0, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_RAND_SEED);
 	pc64_rand_seed(0);
 
 	// Compare buffer with RNG
@@ -282,7 +281,7 @@ int main(void)
 	for (int j = 0; j < 64 && rng_ok; j++) {
 		// Read back 1Mbit of RAND values
 		data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-		pi_read_raw(read_buf, PC64_RAND_ADDRESS_START, 0, sizeof(read_buf));
+		pi_read_raw(read_buf, DDR64_RAND_ADDRESS_START, 0, sizeof(read_buf));
 		printf(".");
 		fflush(stdout);
 
@@ -314,8 +313,8 @@ int main(void)
 	// This is done to ensure that the PicoCart64 is still alive and well,
 	// and hasn't crashed or locked itself up.
 	data_cache_hit_writeback_invalidate(read_buf, sizeof(read_buf));
-	pi_read_raw(read_buf, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_MAGIC, sizeof(uint32_t));
-	if (read_buf32[0] == PC64_MAGIC) {
+	pi_read_raw(read_buf, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_MAGIC, sizeof(uint32_t));
+	if (read_buf32[0] == DDR64_MAGIC) {
 		printf("[ OK ] (second time) MAGIC = 0x%08lX.\n", read_buf32[0]);
 	} else {
 		printf("[FAIL] (second time) MAGIC = 0x%08lX.\n", read_buf32[0]);

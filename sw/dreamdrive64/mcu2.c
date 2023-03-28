@@ -143,7 +143,7 @@ void main_task_entry(__unused void *params)
 
 	// Random test stuff, leave in for now as still heavily debugging
 	// vTaskDelay(5000);
-	//pc64_load_new_rom_command("Doom 64 (USA) (Rev 1).z64");
+	//ddr64_load_new_rom_command("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("Doom 64 (USA) (Rev 1).z64");
 	// load_new_rom("GoldenEye 007 (U) [!].z64");
 	// load_new_rom("Super Mario 64 (USA).z64");

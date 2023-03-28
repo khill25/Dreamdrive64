@@ -53,12 +53,12 @@
 #define MCU1_ECHO_RECEIVED_DATA 0
 #define MCU2_PRINT_UART 0
 
-int PC64_MCU_ID = -1;
+int DDR64_MCU_ID = -1;
 
 volatile int bufferIndex = 0; // Used on MCU1 to track where to put the next byte received from MCU2
 uint8_t lastBufferValue = 0;
 int bufferByteIndex = 0;
-volatile uint16_t pc64_uart_tx_buf[PC64_BASE_ADDRESS_LENGTH];
+volatile uint16_t ddr64_uart_tx_buf[DDR64_BASE_ADDRESS_LENGTH];
 
 volatile uint32_t sd_sector_registers[4];
 volatile uint32_t sd_sector_count_registers[2];
@@ -90,27 +90,27 @@ volatile uint32_t verifyDataTime = 0;
 void save_eeprom_to_sd(FIL* eepromFile);
 void load_eeprom_from_sd(FIL* eepromFile);
 
-void pc64_set_sd_read_sector_part(int index, uint32_t value) {
+void ddr64_set_sd_read_sector_part(int index, uint32_t value) {
     #if SD_CARD_RX_READ_DEBUG == 1
         printf("set read sector part %d = %d", index, value);
     #endif
     sd_sector_registers[index] = value;
 }
 
-void pc64_set_sd_read_sector_count(int index, uint32_t count) {
+void ddr64_set_sd_read_sector_count(int index, uint32_t count) {
     sd_sector_count_registers[index] = count; 
 }
 
-void pc64_set_sd_rom_selection_length_register(uint32_t value, int index) {
+void ddr64_set_sd_rom_selection_length_register(uint32_t value, int index) {
     sd_selected_title_length_registers[index] = value;
 }
 
-void pc64_set_sd_rom_selection(char* titleBuffer, uint32_t len) {
+void ddr64_set_sd_rom_selection(char* titleBuffer, uint32_t len) {
     sd_selected_title_length = len >> 16;
     strncpy(sd_selected_rom_title, titleBuffer, sd_selected_title_length);
 }
 
-void pc64_set_rom_meta_data(uint32_t value, int index) {
+void ddr64_set_rom_meta_data(uint32_t value, int index) {
     if (index == 0) {
         selected_rom_metadata_register = value;
     } else {
@@ -118,7 +118,7 @@ void pc64_set_rom_meta_data(uint32_t value, int index) {
     }
 }
 
-void pc64_send_sd_read_command(void) {
+void ddr64_send_sd_read_command(void) {
     // Block cart while waiting for data
     sd_is_busy = true;
     sendDataReady = false;
@@ -157,7 +157,7 @@ void pc64_send_sd_read_command(void) {
 }
 
 // Send command from MCU1 to MCU2 to start loading a rom
-void pc64_send_load_new_rom_command() {
+void ddr64_send_load_new_rom_command() {
     // Block cart while waiting for data
     sd_is_busy = true;
     sendDataReady = false;
@@ -315,7 +315,7 @@ void mcu2_verify_sent_rom_data() {
     }
 
     volatile uint16_t* buf_16 = (volatile uint16_t*)buf;
-    volatile uint16_t *ptr_16 = (volatile uint16_t *)pc64_uart_tx_buf;
+    volatile uint16_t *ptr_16 = (volatile uint16_t *)ddr64_uart_tx_buf;
     
     for(int i = 0; i < len/2; i++) {
         uint16_t word = ptr_16[i];
@@ -580,7 +580,7 @@ void mcu1_process_rx_buffer() {
                 if (commandHeaderBuffer[0] == COMMAND_LOAD_BACKUP_EEPROM) {
                     eeprom[bufferIndex] = value;
                 } else {
-                    ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = value;
+                    ((uint8_t*)(ddr64_uart_tx_buf))[bufferIndex] = value;
                 }
 
                 bufferIndex++;
@@ -614,7 +614,7 @@ void mcu1_process_rx_buffer() {
             if (command_processBuffer) {
                 command_processBuffer = false;
                 // process what was sent
-                uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
+                uint8_t* buffer = (uint8_t*)ddr64_uart_tx_buf; // cast to char array
                 char command = commandHeaderBuffer[0];
 
                 if (command == COMMAND_SET_EEPROM_TYPE) {
@@ -643,7 +643,7 @@ void mcu1_process_rx_buffer() {
             // else, store the ch into the holding field
             if (bufferByteIndex % 2 == 1) {
                 uint16_t value16 = lastBufferValue << 8 | value;
-                pc64_uart_tx_buf[bufferIndex] = value16;
+                ddr64_uart_tx_buf[bufferIndex] = value16;
                 bufferIndex += 1;
             } else {
                 lastBufferValue = value;
@@ -672,7 +672,7 @@ void mcu2_process_rx_buffer() {
         #endif
 
         if (receivingData) {
-            ((uint8_t*)(pc64_uart_tx_buf))[bufferIndex] = ch;
+            ((uint8_t*)(ddr64_uart_tx_buf))[bufferIndex] = ch;
             bufferIndex++;
 
             if (bufferIndex >= command_numBytesToRead) {
@@ -702,7 +702,7 @@ void mcu2_process_rx_buffer() {
         if (command_processBuffer) {
             command_processBuffer = false;
             // process what was sent
-            uint8_t* buffer = (uint8_t*)pc64_uart_tx_buf; // cast to char array
+            uint8_t* buffer = (uint8_t*)ddr64_uart_tx_buf; // cast to char array
             char command = commandHeaderBuffer[0];
 
             if (command == COMMAND_SD_READ) {
@@ -810,7 +810,7 @@ void save_eeprom_to_sd(FIL* eepromFile) {
 
     printf("Writing %u bytes\n", eeprom_numBytesToBackup);
 
-    uint8_t* buf = (uint8_t*)pc64_uart_tx_buf;
+    uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
     uint numWritten = 0;
     f_write(eepromFile, buf, eeprom_numBytesToBackup, &numWritten);
     f_close(eepromFile);
@@ -844,7 +844,7 @@ void load_eeprom_from_sd(FIL* eepromFile) {
     printf("EEPROM file opened. Reading bytes...\n");
     uint16_t numBytesToSend = eeprom_type == EEPROM_TYPE_4K ? 512 : 2048;
     printf("EEPROM is %u bytes\n", numBytesToSend);
-    uint8_t* buf = (uint8_t*)pc64_uart_tx_buf;
+    uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
     uint numRead = 0;
 
     fr = f_read(eepromFile, buf, numBytesToSend, &numRead);

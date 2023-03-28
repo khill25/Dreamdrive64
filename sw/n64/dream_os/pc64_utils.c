@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <libdragon.h>
-#include "pc64_regs.h"
+#include "ddr64_regs.h"
 #include "pc64_rand.h"
 #include "n64_defs.h"
 #include "pc64_utils.h"
@@ -67,25 +67,18 @@ void verify_memory_range(uint32_t base, uint32_t offset, uint32_t len)
 		assert(end <= CART_DOM1_ADDR3_END);
 		break;
 
-	case PC64_BASE_ADDRESS_START:
-		assert(start >= PC64_BASE_ADDRESS_START);
-		assert(start <= PC64_BASE_ADDRESS_END);
-		assert(end >= PC64_BASE_ADDRESS_START);
-		assert(end <= PC64_BASE_ADDRESS_END);
+	case DDR64_BASE_ADDRESS_START:
+		assert(start >= DDR64_BASE_ADDRESS_START);
+		assert(start <= DDR64_BASE_ADDRESS_END);
+		assert(end >= DDR64_BASE_ADDRESS_START);
+		assert(end <= DDR64_BASE_ADDRESS_END);
 		break;
 
-	case PC64_RAND_ADDRESS_START:
-		assert(start >= PC64_RAND_ADDRESS_START);
-		assert(start <= PC64_RAND_ADDRESS_END);
-		assert(end >= PC64_RAND_ADDRESS_START);
-		assert(end <= PC64_RAND_ADDRESS_END);
-		break;
-
-	case PC64_CIBASE_ADDRESS_START:
-		assert(start >= PC64_CIBASE_ADDRESS_START);
-		assert(start <= PC64_CIBASE_ADDRESS_END);
-		assert(end >= PC64_CIBASE_ADDRESS_START);
-		assert(end <= PC64_CIBASE_ADDRESS_END);
+	case DDR64_CIBASE_ADDRESS_START:
+		assert(start >= DDR64_CIBASE_ADDRESS_START);
+		assert(start <= DDR64_CIBASE_ADDRESS_END);
+		assert(end >= DDR64_CIBASE_ADDRESS_START);
+		assert(end <= DDR64_CIBASE_ADDRESS_END);
 		break;
 
 	default:
@@ -213,7 +206,7 @@ void pc64_uart_write(const uint8_t * buf, uint32_t len)
 	uint32_t len_aligned32 = (len + 3) & (-4);
 
 	data_cache_hit_writeback_invalidate((uint8_t *) buf, len_aligned32);
-	pi_write_raw(write_buf, PC64_BASE_ADDRESS_START, 0, len_aligned32);
+	pi_write_raw(write_buf, DDR64_BASE_ADDRESS_START, 0, len_aligned32);
 
-	pi_write_u32(len, PC64_CIBASE_ADDRESS_START, PC64_REGISTER_UART_TX);
+	pi_write_u32(len, DDR64_CIBASE_ADDRESS_START, DDR64_REGISTER_UART_TX);
 }

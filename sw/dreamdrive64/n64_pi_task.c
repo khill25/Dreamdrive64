@@ -20,8 +20,7 @@
 
 #include "n64_defs.h"
 #include "n64_pi_task.h"
-#include "pc64_rand.h"
-#include "pc64_regs.h"
+#include "ddr64_regs.h"
 #include "pins_mcu1.h"
 #include "ringbuf.h"
 #include "sram.h"
@@ -395,12 +394,12 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			} while (1);
 		}
 #endif
-		else if (last_addr >= PC64_BASE_ADDRESS_START && last_addr <= PC64_BASE_ADDRESS_END) {
+		else if (last_addr >= DDR64_BASE_ADDRESS_START && last_addr <= DDR64_BASE_ADDRESS_END) {
 			// PicoCart64 BASE address space
 			do {
 				// Pre-fetch from the address
-				uint32_t buf_index = (last_addr & (sizeof(pc64_uart_tx_buf) - 1)) >> 1;
-				//next_word = PC64_MAGIC;//swap8(pc64_uart_tx_buf[buf_index]);
+				uint32_t buf_index = (last_addr & (sizeof(ddr64_uart_tx_buf) - 1)) >> 1;
+				//next_word = DDR64_MAGIC;//swap8(ddr64_uart_tx_buf[buf_index]);
 
 				// Read command/address
 				addr = n64_pi_get_value(pio);
@@ -408,12 +407,12 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				if (addr & 0x00000001) {
 					// We got a WRITE
 					// 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-					// pc64_uart_tx_buf[(last_addr & (sizeof(pc64_uart_tx_buf) - 1)) >> 1] = swap8(addr >> 16);
-					pc64_uart_tx_buf[buf_index] = swap8(addr >> 16);
+					// ddr64_uart_tx_buf[(last_addr & (sizeof(ddr64_uart_tx_buf) - 1)) >> 1] = swap8(addr >> 16);
+					ddr64_uart_tx_buf[buf_index] = swap8(addr >> 16);
 					last_addr += 2;
 				} else if (addr == 0) {
 					// READ
-					next_word = pc64_uart_tx_buf[buf_index];
+					next_word = ddr64_uart_tx_buf[buf_index];
 					pio_sm_put(pio, 0, next_word);
 					last_addr += 2;
 
@@ -427,7 +426,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 				}
 			} while (1);
 		
-		} else if (last_addr >= PC64_CIBASE_ADDRESS_START && last_addr <= PC64_CIBASE_ADDRESS_END) {
+		} else if (last_addr >= DDR64_CIBASE_ADDRESS_START && last_addr <= DDR64_CIBASE_ADDRESS_END) {
 			// PicoCart64 CIBASE address space
 			do {
 				// Read command/address
@@ -435,9 +434,9 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 				if (addr == 0) {
 					// READ
-					switch (last_addr - PC64_CIBASE_ADDRESS_START) {
-					case PC64_REGISTER_MAGIC:
-						next_word = PC64_MAGIC;
+					switch (last_addr - DDR64_CIBASE_ADDRESS_START) {
+					case DDR64_REGISTER_MAGIC:
+						next_word = DDR64_MAGIC;
 
 						// Write as a 32-bit word
 						pio_sm_put(pio, 0, next_word >> 16);
@@ -451,7 +450,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 						pio_sm_put(pio, 0, next_word & 0xFFFF);
 
 						break;
-					case PC64_REGISTER_SD_BUSY:
+					case DDR64_REGISTER_SD_BUSY:
 						// next_word = sd_is_busy ? 0x00000001 : 0x00000000;
 						
 						// Upper 16 bits are just 0
@@ -473,7 +472,7 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 						// }
 						
 						break;
-					case (PC64_REGISTER_SD_BUSY + 2):
+					case (DDR64_REGISTER_SD_BUSY + 2):
 						if (sd_is_busy) {
 							pio_sm_put(pio, 0, 0x0001);
 						} else {
@@ -495,74 +494,68 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 					// uint16_t half_word = addr >> 16;
 					uint addr_advance = 2;
 
-					switch (last_addr - PC64_CIBASE_ADDRESS_START) {
-					case PC64_REGISTER_UART_TX:
+					switch (last_addr - DDR64_CIBASE_ADDRESS_START) {
+					case DDR64_REGISTER_UART_TX:
 						write_word |= n64_pi_get_value(pio) >> 16;
-						//stdio_uart_out_chars((const char *)pc64_uart_tx_buf, write_word & (sizeof(pc64_uart_tx_buf) - 1));
+						//stdio_uart_out_chars((const char *)ddr64_uart_tx_buf, write_word & (sizeof(ddr64_uart_tx_buf) - 1));
 						addr_advance = 4;
 						break;
 
-					case PC64_REGISTER_RAND_SEED:
-						write_word |= n64_pi_get_value(pio) >> 16;
-						pc64_rand_seed(write_word);
-						addr_advance = 4;
-						break;
-
-					case PC64_COMMAND_SD_READ:
+					case DDR64_COMMAND_SD_READ:
 						// write_word |= n64_pi_get_value(pio) >> 16;
 						// multicore_fifo_push_blocking(CORE1_SEND_SD_READ_CMD);
 						break;
 
-					case (PC64_COMMAND_SD_READ + 2):
+					case (DDR64_COMMAND_SD_READ + 2):
 						multicore_fifo_push_blocking(CORE1_SEND_SD_READ_CMD);
 						break;
 
-					case PC64_REGISTER_SD_READ_SECTOR0:
+					case DDR64_REGISTER_SD_READ_SECTOR0:
 						// write_word |= n64_pi_get_value(pio) >> 16;
-						// pc64_set_sd_read_sector_part(0, write_word);
-						pc64_set_sd_read_sector_part(0, write_word);
+						// ddr64_set_sd_read_sector_part(0, write_word);
+						ddr64_set_sd_read_sector_part(0, write_word);
 						break;
 
-					case (PC64_REGISTER_SD_READ_SECTOR0+2):
-						pc64_set_sd_read_sector_part(1, write_word);
+					case (DDR64_REGISTER_SD_READ_SECTOR0+2):
+						ddr64_set_sd_read_sector_part(1, write_word);
 						break;
 
-					case PC64_REGISTER_SD_READ_SECTOR1:
+					case DDR64_REGISTER_SD_READ_SECTOR1:
 						// write_word |= n64_pi_get_value(pio) >> 16;
-						// pc64_set_sd_read_sector_part(1, write_word);
-						pc64_set_sd_read_sector_part(2, write_word);
+						// ddr64_set_sd_read_sector_part(1, write_word);
+						ddr64_set_sd_read_sector_part(2, write_word);
 						break;
 
-					case (PC64_REGISTER_SD_READ_SECTOR1 + 2):
-						pc64_set_sd_read_sector_part(3, write_word);
+					case (DDR64_REGISTER_SD_READ_SECTOR1 + 2):
+						ddr64_set_sd_read_sector_part(3, write_word);
 						break;
 
-					case PC64_REGISTER_SD_READ_NUM_SECTORS:
+					case DDR64_REGISTER_SD_READ_NUM_SECTORS:
 						// write_word |= n64_pi_get_value(pio) >> 16;
-						// pc64_set_sd_read_sector_count(1, write_word);
-						pc64_set_sd_read_sector_count(1, write_word);
+						// ddr64_set_sd_read_sector_count(1, write_word);
+						ddr64_set_sd_read_sector_count(1, write_word);
 						break;
 
-					case (PC64_REGISTER_SD_READ_NUM_SECTORS + 2):
-						pc64_set_sd_read_sector_count(0, write_word);
+					case (DDR64_REGISTER_SD_READ_NUM_SECTORS + 2):
+						ddr64_set_sd_read_sector_count(0, write_word);
 						break;
 
-					case PC64_REGISTER_SD_SELECT_ROM:
+					case DDR64_REGISTER_SD_SELECT_ROM:
 						// write_word |= n64_pi_get_value(pio) >> 16;
-						pc64_set_sd_rom_selection_length_register(write_word, 0);
+						ddr64_set_sd_rom_selection_length_register(write_word, 0);
 						break;
 
-					case (PC64_REGISTER_SD_SELECT_ROM + 2):
-						pc64_set_sd_rom_selection_length_register(write_word, 1);
-						pc64_set_sd_rom_selection((char *)pc64_uart_tx_buf, write_word);
+					case (DDR64_REGISTER_SD_SELECT_ROM + 2):
+						ddr64_set_sd_rom_selection_length_register(write_word, 1);
+						ddr64_set_sd_rom_selection((char *)ddr64_uart_tx_buf, write_word);
 						multicore_fifo_push_blocking(CORE1_LOAD_NEW_ROM_CMD);
 						break;
 
-					case (PC64_REGISTER_SELECTED_ROM_META):
-						pc64_set_rom_meta_data(write_word, 0);
+					case (DDR64_REGISTER_SELECTED_ROM_META):
+						ddr64_set_rom_meta_data(write_word, 0);
 						break;
-					case (PC64_REGISTER_SELECTED_ROM_META + 2):
-						pc64_set_rom_meta_data(write_word >> 16, 1);
+					case (DDR64_REGISTER_SELECTED_ROM_META + 2):
+						ddr64_set_rom_meta_data(write_word >> 16, 1);
 						break;
 
 					default:
@@ -591,29 +584,6 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 
 			// Read and handle the following requests normally
 			addr = n64_pi_get_value(pio);
-		} else if (last_addr >= PC64_RAND_ADDRESS_START && last_addr <= PC64_RAND_ADDRESS_END) {
-			// PicoCart64 RAND address space
-			do {
-				// Read command/address
-				addr = n64_pi_get_value(pio);
-
-				if (addr & 0x00000001) {
-					// We got a WRITE
-					last_addr += 2;
-				} else if (addr == 0) {
-					// READ
-					next_word = pc64_rand16();
-					pio_sm_put(pio, 0, next_word);
-					last_addr += 2;
-				} else {
-					// New address
-					break;
-				}
-
-				if (g_restart_pi_handler) {
-					break;
-				}
-			} while (1);
 		} else {
 			// Don't handle this request - jump back to the beginning.
 			// This way, there won't be a bus conflict in case e.g. a physical N64DD is connected.

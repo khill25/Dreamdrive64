@@ -1,11 +1,10 @@
-add_executable(picocart64_v2
+add_executable(dreamdrive64
     mcu1.c
     mcu2.c
     n64_pi_task.c
-    picocart64_v2.c
+    dreamdrive64.c
     psram.c
     qspi_helper.c
-    sha256.c
     sram.c
     # eeprom.c
 
@@ -53,14 +52,14 @@ elseif(FLASH_SIZE_MB STREQUAL "16")
     set(N64_ROM_SIZE "16128k")
 endif()
 
-target_link_options(picocart64_v2 PRIVATE
+target_link_options(dreamdrive64 PRIVATE
     "-Wl,--defsym=__N64_ROM_LENGTH__=${N64_ROM_SIZE}")
 
-pico_generate_pio_header(picocart64_v2
+pico_generate_pio_header(dreamdrive64
     ${CMAKE_CURRENT_LIST_DIR}/ws2812/ws2812.pio
 )
 
-target_compile_definitions(picocart64_v2 PRIVATE
+target_compile_definitions(dreamdrive64 PRIVATE
     PICO_STDOUT_MUTEX=0
     NO_PICO_LED=1
     CONFIG_CIC_YIELD=0
@@ -83,7 +82,7 @@ add_custom_command(OUTPUT ${GIT_INFO_H}
 
 
 
-target_include_directories(picocart64_v2 PRIVATE
+target_include_directories(dreamdrive64 PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/esp32
     ${CMAKE_CURRENT_LIST_DIR}/led
@@ -95,15 +94,15 @@ target_include_directories(picocart64_v2 PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_dependencies(picocart64_v2
+add_dependencies(dreamdrive64
     update_git_info_v2
 )
 
 # pull in common dependencies
-target_link_libraries(picocart64_v2
+target_link_libraries(dreamdrive64
     n64_cic
     n64_pi
-    picocart64_shared
+    dreamdrive64_shared
     pico_multicore
     pico_stdlib
     stdio_async_uart
@@ -116,21 +115,21 @@ target_link_libraries(picocart64_v2
 )
 
 # stdio config
-pico_enable_stdio_usb(picocart64_v2 0)
-pico_enable_stdio_uart(picocart64_v2 1)
+pico_enable_stdio_usb(dreamdrive64 0)
+pico_enable_stdio_uart(dreamdrive64 1)
 
-pico_generate_pio_header(picocart64_v2 
+pico_generate_pio_header(dreamdrive64 
     ${CMAKE_CURRENT_LIST_DIR}/pio_uart/pio_uart.pio
 )
 
-pico_generate_pio_header(picocart64_v2 
+pico_generate_pio_header(dreamdrive64 
 ${CMAKE_CURRENT_LIST_DIR}/joybus/joybus.pio
 )
 
 #OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 # use custom linker script
-pico_set_linker_script(picocart64_v2 ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
+pico_set_linker_script(dreamdrive64 ${CMAKE_CURRENT_LIST_DIR}/memmap_custom.ld)
 
 # create map/bin/hex/uf2 file etc.
-pico_add_extra_outputs(picocart64_v2)
+pico_add_extra_outputs(dreamdrive64)

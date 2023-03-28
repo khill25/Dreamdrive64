@@ -17,11 +17,9 @@
 #include "git_info.h"
 #include "shell.h"
 
-// picocart64_shared
-#include "pc64_regs.h"
-#include "pc64_rand.h"
+#include "ddr64_regs.h"
 #include "n64_defs.h"
-#include "pc64_utils.h"
+// #include "pc64_utils.h"
 
 #include "rom_defs.h"
 
@@ -240,9 +238,8 @@ void loadRomAtSelection(int selection) {
     // g_selectedRomSerial[3] == country code
 
     uint32_t metadata = (gameCic << 16) | (saveType);
-    printf("metadata: %08x\n", metadata);
-    io_write(PC64_CIBASE_ADDRESS_START + PC64_REGISTER_SELECTED_ROM_META, metadata);
-    wait_ms(3);
+    io_write(DDR64_CIBASE_ADDRESS_START + DDR64_REGISTER_SELECTED_ROM_META, metadata);
+    wait_ms(1);
     // TODO Figure out or ask user which region the game is from
     // so we can set force_tv if needed.
 
@@ -260,10 +257,10 @@ void loadRomAtSelection(int selection) {
     // Write the file name to the cart buffer
     uint32_t len_aligned32 = (strlen(fileToLoad) + 3) & (-4);
     data_cache_hit_writeback_invalidate(fileToLoad, len_aligned32);
-    pi_write_raw(fileToLoad, PC64_BASE_ADDRESS_START, 0, len_aligned32);
+    pi_write_raw(fileToLoad, DDR64_BASE_ADDRESS_START, 0, len_aligned32);
 
     uint32_t sdSelectRomFilenameLength = strlen(fileToLoad);
-    io_write(PC64_CIBASE_ADDRESS_START + PC64_REGISTER_SD_SELECT_ROM, sdSelectRomFilenameLength);
+    io_write(DDR64_CIBASE_ADDRESS_START + DDR64_REGISTER_SD_SELECT_ROM, sdSelectRomFilenameLength);
 
     g_isLoading = true;
 
@@ -271,7 +268,7 @@ void loadRomAtSelection(int selection) {
 }
 
 static uint16_t pc64_sd_wait_single() {
-    uint32_t isBusy = io_read(PC64_CIBASE_ADDRESS_START + PC64_REGISTER_SD_BUSY);
+    uint32_t isBusy = io_read(DDR64_CIBASE_ADDRESS_START + DDR64_REGISTER_SD_BUSY);
     return isBusy;
 }
 
@@ -283,7 +280,7 @@ static uint8_t pc64_sd_wait() {
     // Wait until the cartridge interface is ready
     do {
         // returns 1 while sd card is busy
-		isBusy = io_read(PC64_CIBASE_ADDRESS_START + PC64_REGISTER_SD_BUSY);
+		isBusy = io_read(DDR64_CIBASE_ADDRESS_START + DDR64_REGISTER_SD_BUSY);
         
         // Took too long, abort
         if((timeout++) > 10000000) {
@@ -1440,67 +1437,17 @@ static void init_sprites(void) {
     printf("done!\n");
 }
 
-void start_shell(void) {
+int main(void) {
+	display_init(RESOLUTION_320x240, DEPTH_32_BPP, 2, GAMMA_NONE, ANTIALIAS_RESAMPLE);
+	console_init();
+	console_set_render_mode(RENDER_AUTOMATIC);
+	controller_init();
+
+	printf("DREAMOS (git rev %08X)\n\n", GIT_REV);
+
     controller_init();
 
-    // if (usb_initialize()) {
-    //     char usbcart = usb_getcart();
-    //     printf("USB Cart %d\n", usbcart);
-    //     switch (usbcart)
-    //     {
-    //     case CART_64DRIVE:
-    //     case CART_EVERDRIVE:
-    //     case CART_PC64:
-    //         IS_EMULATOR = false;
-    //         break;
-    //     default:
-    //         IS_EMULATOR = true;
-    //     }
-    // } else {
-    //     IS_EMULATOR = true;
-    // }
-
-    // if (IS_EMULATOR) {
-    //     printf("Running in an emulator?\n");
-    // } else {
-    //     printf("Running on real hardware?\n");
-    // }
-
-    // IS_EMULATOR = true;
     IS_EMULATOR = false;
-
-    // printf("PC64_CIBASE_ADDRESS_START: %08x\n", PC64_CIBASE_ADDRESS_START);
-    // pc64_debug_print();
-
-    // EEPROM tests
-    // eeprom_type_t eeprom = eeprom_present();
-    // const size_t eeprom_capacity = eeprom_total_blocks();
-
-    // uint8_t* eepromBuf = malloc(512);
-    // printf("EEPROM type %d, capacity %u\n", (int)eeprom, eeprom_capacity);
-
-    // for(int i = 0; i < 512; i++) {
-    //     eepromBuf[i] = i;
-    // }
-
-    // for(int i = 0; i < 64; i++) {
-    //     eeprom_write(i, &eepromBuf[i*8]);
-    // }    
-
-    // uint8_t* eepromReadBuf = malloc(8);
-    // for(int i = 0; i < 64; i++) {
-    //     eeprom_read(i, eepromReadBuf);
-    //     printf("%04x: ", i);
-    //     for(int i = 0; i < 8; i++) {
-    //         printf("%02x ", eepromReadBuf[i]);
-    //     }
-    //     printf("\n");
-    //     if (i % 16 == 0 && i != 0) {
-    //         silentWaitForStart();
-    //     }
-    // }
-
-    // silentWaitForStart();
 
     // Alloc global holding variables
     temp_serial = malloc(sizeof(char) * 8);
@@ -1518,7 +1465,7 @@ void start_shell(void) {
         bool retrying = true;
         while (retrying) {
             if(!debug_init_sdfs("sd:/", -1)) {
-                printf("Unable to access SD Card on Picocart64. Try again(Start)? Abort(B)\n");
+                printf("Unable to access SD Card on Dreamdrive64. Try again(Start)? Abort(B)\n");
                 while (true) {
                     controller_scan();
                     struct controller_data keys = get_keys_pressed();
@@ -1542,4 +1489,6 @@ void start_shell(void) {
     init_sprites();
     init_loading_animation();
     show_list();
+
+    while(1);;
 }

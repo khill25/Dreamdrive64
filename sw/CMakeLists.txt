@@ -9,7 +9,7 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo)
 # Pull in SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(picocart64 C CXX ASM)
+project(dreamdrive64 C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -41,9 +41,9 @@ add_subdirectory(lib/no-OS-FatFS-SD-SPI-RPi-Pico/src)
 add_subdirectory(n64_cic)
 add_subdirectory(n64_pi)
 add_subdirectory(stdio_async_uart)
-add_subdirectory(picocart64_shared)
+add_subdirectory(dreamdrive64_shared)
 
 # Add applications
 # add_subdirectory(picocart64_v1)
-add_subdirectory(picocart64_v2)
+add_subdirectory(dreamdrive64)
 #add_subdirectory(dualpico)
