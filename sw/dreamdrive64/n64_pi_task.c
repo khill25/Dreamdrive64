@@ -82,21 +82,21 @@ uint32_t g_addressModifierTable[] = {
 // 	uint32_t resolved_address;
 
 // 	if (bank) {
-// 		resolved_address = address & (SRAM_256KBIT_SIZE - 1);
+// 		resolved_address = address & (SRAM_1MBIT_SIZE - 1);
 // 		resolved_address |= bank << 15;
 // 	} else {
-// 		resolved_address = address & (sizeof(sram) - 1);
+// 		resolved_address = address & (SRAM_1MBIT_SIZE - 1);
 // 	}
 
 // 	return resolved_address;
 // }
 
-#define SRAM_SIZE_MASK 0x7FFF
-#define COMBINED_MASK (SRAM_SIZE_MASK | 0x18000) // 0x1FFFF
-static inline uint32_t resolve_sram_address(uint32_t address)
-{
-    return (address & SRAM_SIZE_MASK) | ((address & 0xC0000) >> 3);
-}
+// #define SRAM_SIZE_MASK 0x7FFF
+// #define COMBINED_MASK (SRAM_SIZE_MASK | 0x18000) // 0x1FFFF
+// static inline uint32_t resolve_sram_address(uint32_t address)
+// {
+//     return (address & SRAM_SIZE_MASK) | ((address & 0xC0000) >> 3);
+// }
 
 static inline uint32_t n64_pi_get_value(PIO pio)
 {
@@ -106,6 +106,16 @@ static inline uint32_t n64_pi_get_value(PIO pio)
 
 void __no_inline_not_in_flash_func(n64_pi_run)(void)
 {
+	// allocate space for sram
+	sram = malloc(SRAM_1MBIT_SIZE / sizeof(uint16_t)); // For Flashram support... not yet implemented
+	// if (sram == 0) {
+	// 	printf("Unable to allocate enough memory for 1Mb of sram.\n");
+	// } else {
+	// 	printf("SUCCESS! 1Mb of sram allocated.\n");
+	// }
+	// If we aren't able to allocate 1Mbit, use the "stock" size of 256kbit
+	// sram = malloc(SRAM_256KBIT_SIZE / sizeof(uint16_t));
+
 	// Probably already restarted or first time start, we want to run the loop
 	// until this is true, so always reset it
 	g_restart_pi_handler = false;
@@ -256,39 +266,35 @@ void __no_inline_not_in_flash_func(n64_pi_run)(void)
 			}
 		} else if (last_addr >= CART_SRAM_START && last_addr <= CART_SRAM_END) {
 			// Domain 2, Address 2 Cartridge SRAM
-			sram_addr = (last_addr & 0x7FFF) >> 1;;// ((last_addr & SRAM_SIZE_MASK) | ((last_addr & 0xC0000) >> 3)) >> 1;
-			next_word = sram[sram_addr];
+			sram_addr = (last_addr & (SRAM_1MBIT_SIZE - 1)) >> 1; 	// 4 cycles
+			next_word = sram[sram_addr]; 			// 3 cycles?
 
-			// dma_channel_set_write_addr(sram_dma_write_chan, sram + sram_addr, false);
-			// (&dma_hw->ch[sram_dma_write_chan])->write_addr = (uintptr_t)(sram + sram_addr);
-
-			// dma_channel_set_read_addr(sram_dma_chan, sram + sram_addr, false);
-			// dma_hw->multi_channel_trigger = sram_dma_trigger;
+			// variable++ takes about 5 cycles
+			// & and >> are both 1 cycle each
+			// storing the variable is 2 cycles
+			//
+			// Using the worst case values for num cycles taken
+			// First time + 7 cycles
+			// 8 Cycles before either operation
+			// Read  == 14 cycles + 8 = 22 cycles (29 first time)
+			// Write == 11 cycles + 8 = 19 cycles (26 first time)
+			//
+			// There is an additional wait when looking up the sram data that during testing
+			// appeared to take 8-10 cycles.
 			
 			do {
 				// Read command/address
-				// addr = n64_pi_get_value(pio);
-				while((pio->fstat & 0x100) != 0) { tight_loop_contents(); }
-				addr = pio->rxf[0];
+				while((pio->fstat & 0x100) != 0) { tight_loop_contents(); } // 3-4 cycles
+				addr = pio->rxf[0]; // 2-4 cycles
 
-				if (addr & 0x00000001) {
+				if (addr & 0x00000001) { // 2-3 cycles
 					// We got a WRITE
 					// 0bxxxxxxxx_xxxxxxxx_11111111_11111111
-					// sram_dma_buffer = addr >> 16;
-					// dma_hw->multi_channel_trigger = sram_dma_write_trigger;
-					// last_addr += 2;
-
-					sram[sram_addr++] = addr >> 16;
-					last_addr += 2;
-				} else if (addr == 0) {
+					sram[sram_addr++] = addr >> 16; // 8 cycles
+				} else if (addr == 0) { // 2-3 cycles
 					// READ
-					// pio->txf[0] = sram_dma_buffer;
-					// last_addr += 2;
-					// dma_hw->multi_channel_trigger = sram_dma_trigger;
-
-					pio->txf[0] = next_word;
-					last_addr += 2;
-					next_word = sram[++sram_addr];
+					pio->txf[0] = next_word; // 4 cycles
+					next_word = sram[++sram_addr]; // 7 cycles
 					
 				} else {
 					// New address
