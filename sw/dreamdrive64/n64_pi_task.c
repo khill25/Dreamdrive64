@@ -76,28 +76,6 @@ uint32_t g_addressModifierTable[] = {
 	PSRAM_ADDRESS_MODIFIER_8
 };
 
-// static inline uint32_t resolve_sram_address(uint32_t address)
-// {	
-// 	uint32_t bank = (address >> 18) & 0x3;
-// 	uint32_t resolved_address;
-
-// 	if (bank) {
-// 		resolved_address = address & (SRAM_1MBIT_SIZE - 1);
-// 		resolved_address |= bank << 15;
-// 	} else {
-// 		resolved_address = address & (SRAM_1MBIT_SIZE - 1);
-// 	}
-
-// 	return resolved_address;
-// }
-
-// #define SRAM_SIZE_MASK 0x7FFF
-// #define COMBINED_MASK (SRAM_SIZE_MASK | 0x18000) // 0x1FFFF
-// static inline uint32_t resolve_sram_address(uint32_t address)
-// {
-//     return (address & SRAM_SIZE_MASK) | ((address & 0xC0000) >> 3);
-// }
-
 static inline uint32_t n64_pi_get_value(PIO pio)
 {
 	uint32_t value = pio_sm_get_blocking(pio, 0);
@@ -107,14 +85,14 @@ static inline uint32_t n64_pi_get_value(PIO pio)
 void __no_inline_not_in_flash_func(n64_pi_run)(void)
 {
 	// allocate space for sram
-	sram = malloc(SRAM_1MBIT_SIZE / sizeof(uint16_t)); // For Flashram support... not yet implemented
+	// sram = malloc(SRAM_1MBIT_SIZE / sizeof(uint16_t)); // For Flashram support... not yet implemented
 	// if (sram == 0) {
 	// 	printf("Unable to allocate enough memory for 1Mb of sram.\n");
 	// } else {
 	// 	printf("SUCCESS! 1Mb of sram allocated.\n");
 	// }
 	// If we aren't able to allocate 1Mbit, use the "stock" size of 256kbit
-	// sram = malloc(SRAM_256KBIT_SIZE / sizeof(uint16_t));
+	sram = malloc(SRAM_256KBIT_SIZE / sizeof(uint16_t));
 
 	// Probably already restarted or first time start, we want to run the loop
 	// until this is true, so always reset it

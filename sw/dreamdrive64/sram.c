@@ -11,5 +11,4 @@
 
 #include "pico/stdlib.h"
 
-//[SRAM_256KBIT_SIZE / sizeof(uint16_t)]
 uint16_t *sram;

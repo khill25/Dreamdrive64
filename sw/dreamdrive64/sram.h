@@ -12,5 +12,4 @@
 #define SRAM_768KBIT_SIZE         0x00018000
 #define SRAM_1MBIT_SIZE           0x00020000
 
-// Originally = SRAM_256KBIT_SIZE / sizeof(uint16_t)
 extern uint16_t *sram;

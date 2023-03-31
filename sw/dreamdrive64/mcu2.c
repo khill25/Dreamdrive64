@@ -179,6 +179,11 @@ void main_task_entry(__unused void *params)
 			start_eeprom_sd_save();
 		}
 
+		if (start_saveSramData) {
+			start_saveSramData = false;
+			start_sram_sd_save();
+		}
+
 	#if IS_DOING_READ_TEST == 1
 		if (is_verifying_rom_data_from_mcu1) {
 			is_verifying_rom_data_from_mcu1 = false;

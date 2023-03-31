@@ -24,6 +24,7 @@
 #include "psram.h"
 #include "ringbuf.h"
 #include "joybus/joybus.h"
+#include "sram.h"
 
 #include "utils.h"
 #include "FreeRTOS.h"
@@ -31,20 +32,22 @@
 
 #define SD_CARD_RX_READ_DEBUG 0
 
-#define REGISTER_SD_COMMAND 0x0 // 1 byte, r/w
-#define REGISTER_SD_READ_SECTOR 0x1 // 4 bytes
-#define REGISTER_SD_READ_SECTOR_COUNT 0x5 // 4 bytes
-#define COMMAND_START    0xDE
-#define COMMAND_START2   0xAD
-#define COMMAND_SD_READ  0x72 // literally the r char
-#define COMMAND_SD_WRITE 0x77 // literally the w char
-#define COMMAND_LOAD_ROM 0x6C // literally the l char
-#define COMMAND_ROM_LOADED 0xC6 // inverse of the load rom command
-#define COMMAND_VERIFY_ROM_DATA 0xF1 // Command to check the data sent
-#define COMMAND_BACKUP_EEPROM  (0xBE)
-#define COMMAND_LOAD_BACKUP_EEPROM  (0xEB)
-#define COMMAND_SET_EEPROM_TYPE  (0xE7)
-#define COMMAND_SET_ROM_META_INFO  (0xA1)
+#define REGISTER_SD_COMMAND             0x0 // 1 byte, r/w
+#define REGISTER_SD_READ_SECTOR         0x1 // 4 bytes
+#define REGISTER_SD_READ_SECTOR_COUNT   0x5 // 4 bytes
+#define COMMAND_START                   0xDE
+#define COMMAND_START2                  0xAD
+#define COMMAND_SD_READ                 0x72 // literally the r char
+#define COMMAND_SD_WRITE                0x77 // literally the w char
+#define COMMAND_LOAD_ROM                0x6C // literally the l char
+#define COMMAND_ROM_LOADED              0xC6 // inverse of the load rom command
+#define COMMAND_VERIFY_ROM_DATA         0xF1 // Command to check the data sent
+#define COMMAND_BACKUP_EEPROM           (0xBE)
+#define COMMAND_LOAD_BACKUP_EEPROM      (0xEB)
+#define COMMAND_SET_EEPROM_TYPE         (0xE7)
+#define COMMAND_SET_ROM_META_INFO       (0xA1)
+#define COMMAND_BACKUP_SRAM             (0xA2)
+#define COMMAND_LOAD_SRAM_BACKUP        (0x2A)
 #define DISK_READ_BUFFER_SIZE 512
 
 #define DEBUG_MCU2_PSRAM_SANITY_TEST 0
@@ -58,7 +61,9 @@ int DDR64_MCU_ID = -1;
 volatile int bufferIndex = 0; // Used on MCU1 to track where to put the next byte received from MCU2
 uint8_t lastBufferValue = 0;
 int bufferByteIndex = 0;
+volatile bool ddr64_useDynamicBuffer = false; // Toggle to use the default buffer or large buffer
 volatile uint16_t ddr64_uart_tx_buf[DDR64_BASE_ADDRESS_LENGTH];
+volatile uint8_t* ddr64_dynamic_large_buffer; // Set based on needs that might be larger than the uart tx buf. e.g. sram save
 
 volatile uint32_t sd_sector_registers[4];
 volatile uint32_t sd_sector_count_registers[2];
@@ -81,14 +86,16 @@ volatile uint32_t sectorToSendRegisters[2];
 volatile uint32_t numSectorsToSend = 0;
 volatile bool startRomLoad = false;
 volatile bool romLoading = false;
-volatile uint16_t eeprom_numBytesToBackup = 0;
+volatile uint16_t save_data_numBytesToBackup = 0; // Num bytes to backup for eeprom or sram
 volatile bool start_saveEeepromData = false;
 volatile bool start_loadEeepromData = false;
+volatile bool start_saveSramData = false;
+volatile bool start_loadSramData = false;
 volatile bool is_verifying_rom_data_from_mcu1 = false;
 volatile uint32_t verifyDataTime = 0;
 
-void save_eeprom_to_sd(FIL* eepromFile);
-void load_eeprom_from_sd(FIL* eepromFile);
+int save_saveData_to_sd(FIL* saveFile, char* saveFilename, int ddr_saveType);
+int load_saveData_from_sd(FIL* saveFile, char* saveFilename, int ddr_saveType);
 
 void ddr64_set_sd_read_sector_part(int index, uint32_t value) {
     #if SD_CARD_RX_READ_DEBUG == 1
@@ -210,8 +217,11 @@ void extract_metadata_and_send_save_info(char* buf, FIL* fil) {
 
     printf("meta register: %08x\n", selected_rom_metadata_register);
     printf("CIC: %d, saveType: %d, country: %c\n", selected_rom_cic, saveType, buf[0x3E]);
-    printf("Sending eeprom info to mcu1...\n");
 
+    // Depending on the save type (sram or eeprom, or in some cases BOTH)
+    // Send the appropriate save data to mcu1
+
+    printf("Sending eeprom info to mcu1...\n");
     uart_tx_program_putc(COMMAND_START);
     uart_tx_program_putc(COMMAND_START2);
     uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
@@ -238,7 +248,7 @@ void extract_metadata_and_send_save_info(char* buf, FIL* fil) {
         for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
 
         // Send the eeprom save data
-        load_eeprom_from_sd(fil);
+        load_saveData_from_sd(fil, sd_selected_rom_title, 0);
         printf("Finished sending eeprom data to mcu1!\n");
 
         // for(int i = 0; i < 10000; i++) { tight_loop_contents(); }
@@ -402,6 +412,12 @@ void mcu1_process_rx_buffer() {
                 // Special case to send bytes directly into the eeprom array
                 if (commandHeaderBuffer[0] == COMMAND_LOAD_BACKUP_EEPROM) {
                     eeprom[bufferIndex] = value;
+                
+                // Special case to send bytes directly into the sram array
+                } else if (commandHeaderBuffer[0] == COMMAND_LOAD_SRAM_BACKUP) {
+                    ((uint8_t*)(sram))[bufferIndex] = value;
+
+                // Use the regular buffer
                 } else {
                     ((uint8_t*)(ddr64_uart_tx_buf))[bufferIndex] = value;
                 }
@@ -495,7 +511,12 @@ void mcu2_process_rx_buffer() {
         #endif
 
         if (receivingData) {
-            ((uint8_t*)(ddr64_uart_tx_buf))[bufferIndex] = ch;
+            if(ddr64_useDynamicBuffer) {
+                ddr64_dynamic_large_buffer[bufferIndex] = ch;
+            } else {
+                ((uint8_t*)(ddr64_uart_tx_buf))[bufferIndex] = ch;
+            }
+
             bufferIndex++;
 
             if (bufferIndex >= command_numBytesToRead) {
@@ -507,6 +528,19 @@ void mcu2_process_rx_buffer() {
 
             if (command_headerBufferIndex >= COMMAND_HEADER_LENGTH) {
                 command_numBytesToRead = (commandHeaderBuffer[1] << 8) | commandHeaderBuffer[2];
+
+                // TODO just use the dynamic buffer for everything?
+                // If we are reading large data, use the dynamic buffer
+                if (command_numBytesToRead > sizeof(ddr64_uart_tx_buf)) {
+                    if (ddr64_dynamic_large_buffer == 0) {
+                        free((void*)ddr64_dynamic_large_buffer);
+                    }
+                    ddr64_useDynamicBuffer = true;
+                    ddr64_dynamic_large_buffer = malloc(command_numBytesToRead+1);
+                } else {
+                    ddr64_useDynamicBuffer = false;
+                }
+                
                 isReadingCommandHeader = false;
                 receivingData = true;
                 command_headerBufferIndex = 0;
@@ -545,7 +579,7 @@ void mcu2_process_rx_buffer() {
                 #endif
 
             } else if (command == COMMAND_BACKUP_EEPROM) {
-                eeprom_numBytesToBackup = command_numBytesToRead;
+                save_data_numBytesToBackup = command_numBytesToRead;
                 start_saveEeepromData = true;
                 #if DEBUG_MCU2_PRINT == 1
                 printf("eeprom nbtr: %u\n", command_numBytesToRead);
@@ -557,8 +591,12 @@ void mcu2_process_rx_buffer() {
             } else if (command == COMMAND_SET_ROM_META_INFO) {
                 printf("%02x %02x %02x %02x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
                 selected_rom_metadata_register = (buffer[0] << 24) | (buffer[1] << 16) | (buffer[2] << 8) | (buffer[3]);
-            }
-            else {
+
+            } else if (command == COMMAND_BACKUP_SRAM) {
+                save_data_numBytesToBackup = command_numBytesToRead;
+                start_saveSramData = true;
+
+            } else {
                 // not supported yet
                 printf("\nUnknown command: %x\n", command);
             }
@@ -608,80 +646,225 @@ void extract_filename_from_possible_filepath(char* filepath, char* filename) {
 
 void start_eeprom_sd_save() {
     FIL eepromSave;
-    save_eeprom_to_sd(&eepromSave);
+    save_saveData_to_sd(&eepromSave, sd_selected_rom_title, 0);
 }
 
-void save_eeprom_to_sd(FIL* eepromFile) {
-    printf("Saving eeprom data...\n");
+void start_sram_sd_save() {
+    FIL sramSave;
+    save_saveData_to_sd(&sramSave, sd_selected_rom_title, 1);
+}
+
+// void save_eeprom_to_sd(FIL* eepromFile) {
+//     printf("Saving eeprom data...\n");
+//     // Open or create file for currently loaded rom
+//     char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
+//     char* extractedFilename = malloc(256 + 5);
+
+//     extract_filename_from_possible_filepath(sd_selected_rom_title, extractedFilename);
+//     sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", extractedFilename);
+//     free(extractedFilename);
+
+//     FRESULT fr = f_open(eepromFile, eepromSaveFilename, FA_CREATE_ALWAYS | FA_WRITE);
+//     if (fr != FR_OK) {
+//         printf("'%s' Cannot be opened. Error: %u\n", eepromSaveFilename, fr);
+//         printf("Aborting eeprom save :(\n");
+//         free(eepromSaveFilename);
+//         return;
+//     }
+
+//     free(eepromSaveFilename);
+
+//     printf("Writing %u bytes\n", save_data_numBytesToBackup);
+
+//     uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
+//     uint numWritten = 0;
+//     f_write(eepromFile, buf, save_data_numBytesToBackup, &numWritten);
+//     f_close(eepromFile);
+//     if (numWritten != save_data_numBytesToBackup) {
+//         printf("Error saving eeprom. Wrote %d but expected %u\n", numWritten, save_data_numBytesToBackup);
+//     } else {
+//         printf("Eeprom saved to %s\n", eepromSaveFilename);
+//     }
+// }
+
+// void load_eeprom_from_sd(FIL* eepromFile) {
+//     start_loadEeepromData = false;
+
+//     // Open or create file for currently loaded rom
+//     char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
+//     char* tempFilename = malloc(256 + 5);
+
+//     extract_filename_from_possible_filepath(sd_selected_rom_title, tempFilename);
+//     sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", tempFilename);
+//     free(tempFilename);
+    
+//     FRESULT fr = f_open(eepromFile, eepromSaveFilename, FA_READ);
+//     if (FR_OK != fr && FR_EXIST != fr) {
+//         printf("'%s' file not found. Error: %u\n", eepromSaveFilename, fr);
+//         free(eepromSaveFilename);
+//         return;
+//     }
+
+//     free(eepromSaveFilename);
+
+//     printf("EEPROM file opened. Reading bytes...\n");
+//     uint16_t numBytesToSend = eeprom_type == EEPROM_TYPE_4K ? 512 : 2048;
+//     printf("EEPROM is %u bytes\n", numBytesToSend);
+//     uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
+//     uint numRead = 0;
+
+//     fr = f_read(eepromFile, buf, numBytesToSend, &numRead);
+//     if(fr != FR_OK) {
+//         printf("Error reading from eepromfile. Error: %u\n", fr);
+//         f_close(eepromFile);
+//         return;
+//     }
+
+//     fr = f_close(eepromFile);
+//     if (numRead != numBytesToSend) {
+//         printf("Error reading eeprom. Read %d but expected %u\n", numRead, numBytesToSend);
+//         return;
+//     }
+
+//     printf("Sending %u bytes\n", numBytesToSend);
+//     uart_tx_program_putc(COMMAND_START);
+//     uart_tx_program_putc(COMMAND_START2);
+//     uart_tx_program_putc(COMMAND_LOAD_BACKUP_EEPROM);
+//     uart_tx_program_putc((uint8_t)(numBytesToSend >> 8));
+//     uart_tx_program_putc((uint8_t)(numBytesToSend));
+
+//     for(int i = 0; i < numBytesToSend; i++) {
+//         while (!uart_tx_program_is_writable()) {
+//             tight_loop_contents();
+//         }
+//         uart_tx_program_putc(buf[i]);
+//     }
+// }
+
+// ddr_saveType: 0 = eeprom, 1 = sram
+int save_saveData_to_sd(FIL* saveFile, char* saveFilename, int ddr_saveType) {
+    char* saveFilePath;
+    char* fileExtension;
+
+    if (ddr_saveType == 0) {
+        printf("Saving eeprom data...\n");
+        saveFilePath = "0:/ddr_firmware/n64/eeprom/";
+        fileExtension = "eep";
+    } else if (ddr_saveType == 1) {
+        printf("Saving sram data...\n");
+        saveFilePath = "0:/ddr_firmware/n64/sram/";
+        fileExtension = "sram";
+    } else {
+        printf("Invalid save type '%d'.\n", ddr_saveType);
+        return -2;
+    }
+
     // Open or create file for currently loaded rom
-    char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
+    char* dataSaveFilePath = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
     char* extractedFilename = malloc(256 + 5);
 
     extract_filename_from_possible_filepath(sd_selected_rom_title, extractedFilename);
-    sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", extractedFilename);
+    sprintf(dataSaveFilePath, "%s%s.%s", saveFilePath, extractedFilename);
     free(extractedFilename);
 
-    FRESULT fr = f_open(eepromFile, eepromSaveFilename, FA_CREATE_ALWAYS | FA_WRITE);
+    FRESULT fr = f_open(saveFile, dataSaveFilePath, FA_CREATE_ALWAYS | FA_WRITE);
     if (fr != FR_OK) {
-        printf("'%s' Cannot be opened. Error: %u\n", eepromSaveFilename, fr);
-        printf("Aborting eeprom save :(\n");
-        free(eepromSaveFilename);
-        return;
+        printf("'%s' Cannot be opened. Error: %u\n", saveFilename, fr);
+        printf("Aborting save :(\n");
+        return -1;
     }
 
-    free(eepromSaveFilename);
-
-    printf("Writing %u bytes\n", eeprom_numBytesToBackup);
-
-    uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
+    printf("Writing %u bytes\n", save_data_numBytesToBackup);
+    
+    uint8_t* buf;
+    if (ddr_saveType == 0) {
+        buf = (uint8_t*)ddr64_uart_tx_buf;
+    } else if (ddr_saveType == 1) {
+        buf = (uint8_t*)ddr64_dynamic_large_buffer;
+    }
+    
     uint numWritten = 0;
-    f_write(eepromFile, buf, eeprom_numBytesToBackup, &numWritten);
-    f_close(eepromFile);
-    if (numWritten != eeprom_numBytesToBackup) {
-        printf("Error saving eeprom. Wrote %d but expected %u\n", numWritten, eeprom_numBytesToBackup);
+    f_write(saveFile, buf, save_data_numBytesToBackup, &numWritten);
+    f_close(saveFile);
+
+    if (numWritten != save_data_numBytesToBackup) {
+        printf("Error saving data. Wrote %d but expected %u\n", numWritten, save_data_numBytesToBackup);
     } else {
-        printf("Eeprom saved to %s\n", eepromSaveFilename);
+        printf("Data saved to %s\n", dataSaveFilePath);
     }
+
+    free(dataSaveFilePath);
+
+    return numWritten;
 }
 
-void load_eeprom_from_sd(FIL* eepromFile) {
-    start_loadEeepromData = false;
+int load_saveData_from_sd(FIL* saveFile, char* saveFilename, int ddr_saveType) {
+    char* saveFilePath;
+    char* fileExtension;
+    if (ddr_saveType == 0) {
+        start_loadEeepromData = false;
+        printf("Loading eeprom data...\n");
+        saveFilePath = "0:/ddr_firmware/n64/eeprom/";
+        fileExtension = "eep";
+    } else if (ddr_saveType == 1) {
+        start_loadSramData = false;
+        printf("Loading sram data...\n");
+        saveFilePath = "0:/ddr_firmware/n64/sram/";
+        fileExtension = "sram";
+    } else {
+        printf("Invalid save type '%d'.\n", ddr_saveType);
+        return -2;
+    }
 
     // Open or create file for currently loaded rom
-    char* eepromSaveFilename = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
+    char* dataSaveFilePath = malloc(256 + 5); // 256 for max length rom filename + 4 for '.eep' and a terminating character
     char* tempFilename = malloc(256 + 5);
 
     extract_filename_from_possible_filepath(sd_selected_rom_title, tempFilename);
-    sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", tempFilename);
+    sprintf(dataSaveFilePath, "%s%s.%s", saveFilePath, tempFilename, fileExtension);
     free(tempFilename);
     
-    FRESULT fr = f_open(eepromFile, eepromSaveFilename, FA_READ);
+    FRESULT fr = f_open(saveFile, dataSaveFilePath, FA_READ);
     if (FR_OK != fr && FR_EXIST != fr) {
-        printf("'%s' file not found. Error: %u\n", eepromSaveFilename, fr);
-        free(eepromSaveFilename);
-        return;
+        printf("'%s' file not found. Error: %u\n", dataSaveFilePath, fr);
+        free(dataSaveFilePath);
+        return - 1;
     }
 
-    free(eepromSaveFilename);
+    uint16_t numBytesToSend;
+    if (ddr_saveType == 0) {
+        printf("EEPROM file opened. Reading bytes...\n");
+        numBytesToSend = eeprom_type == EEPROM_TYPE_4K ? 512 : 2048;
+        printf("EEPROM is %u bytes\n", numBytesToSend);
+    } else {
+        printf("SRAM file opened. Reading bytes...\n");
+        numBytesToSend = 0x8000; // 32KB, default sram save size
+        printf("SRAM is %u bytes\n", numBytesToSend);
+    }
 
-    printf("EEPROM file opened. Reading bytes...\n");
-    uint16_t numBytesToSend = eeprom_type == EEPROM_TYPE_4K ? 512 : 2048;
-    printf("EEPROM is %u bytes\n", numBytesToSend);
-    uint8_t* buf = (uint8_t*)ddr64_uart_tx_buf;
+    uint8_t* buf;
+    if (ddr_saveType == 0) {
+        buf = (uint8_t*)ddr64_uart_tx_buf;
+    } else if (ddr_saveType == 1) {
+        buf = (uint8_t*)ddr64_dynamic_large_buffer;
+    }
+
     uint numRead = 0;
 
-    fr = f_read(eepromFile, buf, numBytesToSend, &numRead);
+    fr = f_read(saveFile, buf, numBytesToSend, &numRead);
     if(fr != FR_OK) {
-        printf("Error reading from eepromfile. Error: %u\n", fr);
-        f_close(eepromFile);
-        return;
+        printf("Error reading save file '%s'. Error: %u\n", dataSaveFilePath, fr);
+        f_close(saveFile);
+        return -1;
     }
 
-    fr = f_close(eepromFile);
+    fr = f_close(saveFile);
     if (numRead != numBytesToSend) {
-        printf("Error reading eeprom. Read %d but expected %u\n", numRead, numBytesToSend);
-        return;
+        printf("Error reading save file. Read %d but expected %u\n", numRead, numBytesToSend);
+        return -1;
     }
+
+    free(dataSaveFilePath);
 
     printf("Sending %u bytes\n", numBytesToSend);
     uart_tx_program_putc(COMMAND_START);
@@ -696,6 +879,8 @@ void load_eeprom_from_sd(FIL* eepromFile) {
         }
         uart_tx_program_putc(buf[i]);
     }
+
+    return numRead;
 }
 
 BYTE diskReadBuffer[DISK_READ_BUFFER_SIZE];

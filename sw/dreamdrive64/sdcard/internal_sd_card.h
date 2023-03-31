@@ -22,6 +22,8 @@ extern volatile bool startRomLoad;
 extern volatile bool romLoading;
 extern volatile bool start_saveEeepromData;
 extern volatile bool start_loadEeepromData;
+extern volatile bool start_saveSramData;
+extern volatile bool start_loadSramData;
 extern volatile bool is_verifying_rom_data_from_mcu1;
 extern volatile uint32_t verifyDataTime;
 extern volatile int selected_rom_save_type;
@@ -72,6 +74,7 @@ void ddr64_send_load_new_rom_command();
 void load_new_rom(char* filename);
 
 void start_eeprom_sd_save();
+void start_sram_sd_save();
 
 void test_read_psram(const char* filename);
 
