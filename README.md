@@ -14,6 +14,16 @@ In development Nintendo 64 flash cart based around Raspberry Pi RP2040s.
 	* Menu rom can render thumbnail boxart of a rom when scrolling through file list
 	* Libdragon changes are needed if you want to compile your own rom for the firmware, those changes aren't up anywhere... yet!
   * Hardware design is still in flux. Only attempt to build your own if you are willing to debug random hardware/software issues.
+ 
+---
+# Getting one
+## Buy one from my website! 
+https://dreamcraftindustries.com/products/dreamdrive64
+
+## Build your own with PCBWay
+You can load up the hw files in Kicad and use the PCBWay plugin. The PCBWay plugin will take you right to the PCBWay website with the gerbers loaded up. 
+
+---
 
 ## Features
 | Feature					| Status 	 | Notes 	|
