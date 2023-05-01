@@ -1,15 +1,6 @@
 # DREAMDrive64
-This is a fork of the original PicoCart64. Sales coming soon at dreamcraftindustries.com. Stay tuned!
+Nintendo 64 flash cart based around Raspberry Pi RP2040s. Load roms up to 64MB, EEPROM save support, supports all cic versions.
 
-In development Nintendo 64 flash cart based around Raspberry Pi RP2040s.
-
-# Current Dev Status
-* DREAMDrive64 can boot roms with active firmware development in progress. 
-	* Menu rom can navigate the sd file system assuming a rational number of files/folders (256 at the moment per directory, 10 directory depth limit)
-	* Menu rom can render thumbnail boxart of a rom when scrolling through file list
-	* Libdragon changes are needed if you want to compile your own rom for the firmware, those changes are in PR over at the libdragon repo
-	* Firmware is stable with a v1.0.0 release available right now, with more improvements on the way.
- 
 ---
 # Getting one
 ## Buy one from my website! 
@@ -29,6 +20,13 @@ The shell will need to be cut to accomodate the SD Card slot and USB port.
 	* Less than 1mm deep on the front shell
 
 ---
+# Current Dev Status
+* DREAMDrive64 can boot roms and has made the v1.0.0 release! 
+	* Menu rom can navigate the sd file system assuming a rational number of files/folders (256 at the moment per directory, 10 directory depth limit)
+	* Menu rom can render thumbnail boxart of a rom when scrolling through file list
+	* Libdragon changes are needed if you want to compile your own rom for the firmware, those changes are in PR over at the libdragon repo
+	* Firmware is stable with a v1.0.0 release available right now, with more improvements on the way.
+ 
 
 ## Features
 | Feature					| Status 	 | Notes 	|
@@ -58,8 +56,9 @@ Still working towards booting at full sdk speeds (0x1240) but current v1.0.0 fir
 | Select Rom				| 0x1FFE0024 | 0xFF		| Send title of rom to load from sd card e.g. "my_homebrew_rom.z64"	|
 
 # Examples of SD card access
-Libdragon sdfs implementation for DreamDrive64. This code is just snippets and may not "just work" yet. It should give you an idea of how to use the command registers and the order that things need to be done in.
+There is an open PR for sdfs support in the Libdragon repo! Check that out if you want to patch your libdragon installs.
 
+Libdragon sdfs implementation for DreamDrive64. This code is just snippets and may not "just work" yet. It should give you an idea of how to use the command registers and the order that things need to be done in.
 Example code to load a rom with the file's name. Updates to Libdragon's `debug.c` must be made if you plan on using file methods (e.g. f_open, f_read, etc...)
 ```
 // From command register table above
