@@ -4,16 +4,11 @@ This is a fork of the original PicoCart64. Sales coming soon at dreamcraftindust
 In development Nintendo 64 flash cart based around Raspberry Pi RP2040s.
 
 # Current Dev Status
-* Development is in progress with firmware at a functional stage although missing some features.
-* v1-lite versions can load roms up to 16MBs
-  * Are basic boards useful for developers wanting to test on real hardware.
-  * Barebones, easy to build yourself.
-* v2 based boards (DREAMDrive64) can boot roms with active firmware development in progress. 
-	* SD read speed is currently limited by the SPI interface. Looking into SDIO upgrades for faster rom load times
+* DREAMDrive64 can boot roms with active firmware development in progress. 
 	* Menu rom can navigate the sd file system assuming a rational number of files/folders (256 at the moment per directory, 10 directory depth limit)
 	* Menu rom can render thumbnail boxart of a rom when scrolling through file list
-	* Libdragon changes are needed if you want to compile your own rom for the firmware, those changes aren't up anywhere... yet!
-  * Hardware design is still in flux. Only attempt to build your own if you are willing to debug random hardware/software issues.
+	* Libdragon changes are needed if you want to compile your own rom for the firmware, those changes are in PR over at the libdragon repo
+	* Firmware is stable with a v1.0.0 release available right now, with more improvements on the way.
  
 ---
 # Getting one
@@ -21,7 +16,17 @@ In development Nintendo 64 flash cart based around Raspberry Pi RP2040s.
 https://dreamcraftindustries.com/products/dreamdrive64
 
 ## Build your own with PCBWay
-You can load up the hw files in Kicad and use the PCBWay plugin. The PCBWay plugin will take you right to the PCBWay website with the gerbers loaded up. 
+You can load up the hw files in Kicad and use the PCBWay plugin. The PCBWay plugin will take you right to the PCBWay website with the gerbers loaded up and ready to order. 
+
+### N64 Cartridge Shell
+You can use a doner shell or find some on Aliexpress/Ebay.
+The shell will need to be cut to accomodate the SD Card slot and USB port.
+
+* SD Card Slot Cuts 
+	* These cuts should be 15mm wide
+		* This cut should start approximately 46.5mm from the bottom of the shell on the outside edge.
+	* 3mm Deep on the back shell
+	* Less than 1mm deep on the front shell
 
 ---
 
@@ -29,28 +34,28 @@ You can load up the hw files in Kicad and use the PCBWay plugin. The PCBWay plug
 | Feature					| Status 	 | Notes 	|
 |--------------------------:|:-----------|---------:|
 | Rom Loading				| Complete!	 |			|
-| SD Filesystem navigation	| Partial	 |  		|
+| SD Filesystem navigation	| Complete!	 | Folder/File limit ~100 per directory 		|
 | Wifi						| Soon		 |			|
-| EEPROM save support		| Partial		 |			|
-| SRAM support 				| Complete!  |			|
+| EEPROM save support		| Complete!		 |			|
+| SRAM support 				| Complete!  | Some games require much higher sram timing than is currently working. SRAM doesn't save to SD card. SRAM data will only persist while the game is running.		|
+| CIC Compatibility			| Complete!	 | All cic versions should work. Country version however needs to be matched with the version flashed to the board (PAL vs NTSC) |
 
-**ROM compatibility is still WIP**
-Work is still in progress to get v2 boards booting at full sdk speeds (0x1240) and to get sram access fast enough for some titles. I'm currently troubleshooting booting games with CIC chips other than 6102.
+**ROM Compatibility **
+Still working towards booting at full sdk speeds (0x1240) but current v1.0.0 firmware is at 0x2040. SRAM access isn't fast enough for some titles. 
 
 # Command Registers
-| Register					| Address 	 | Length 	| Notes 				| Availability 	|
-|--------------------------:|:-----------|:---------|----------------------:|---------------|
+| Register					| Address 	 | Length 	| Notes 				|
+|--------------------------:|:-----------|:---------|----------------------:|
 | Base Address				| 0x1FFE0000 | 0x1000	| 4kB buffer/Currently shared as internal buffer   			| v1/lite and v2|
-| Command Interface Start	| 0x1FFE1000 | 0x0800	|						| v1/lite and v2|
-| UART TX					| 0x1FFE0004 | 0x4		| Num bytes to to print | v1/lite		| 
-| Random Seed   			| 0x1FFE0008 | 0x4		|						| v1/lite and v2|
-| Start SD Read				| 0x1FFE000C | 0x4		|						| v2
-| SD Rom Select				| 0x1FFE0010 | 0x4		| Loads selected rom into psram	| v2	|
+| Command Interface Start	| 0x1FFE1000 | 0x0800	|						| 
+| Random Seed   			| 0x1FFE0008 | 0x4		|						| 
+| Start SD Read				| 0x1FFE000C | 0x4		|						| 
+| SD Rom Select				| 0x1FFE0010 | 0x4		| Loads selected rom into psram	|
 | SD Busy					| 0x1FFE0014 | 0x4  	| After an sd request is sent, data will be available at `Base Address` once sd busy = 0						| v2	|
-| SD Read Sector Register 0	| 0x1FFE0018 | 0x4		| High bits of uint64 sector to read	| v2	|
-| SD Read Sector Register 1	| 0x1FFE001C | 0x4		| Low bits of uin64 sector to read	| v2	|
-| SD Read number of sectors	| 0x1FFE0020 | 0x4		| v2 code has this hard coded to always read 1 sector	| v2	|
-| Select Rom				| 0x1FFE0024 | 0xFF		| Send title of rom to load from sd card e.g. "my_homebrew_rom.z64"	| v2	|
+| SD Read Sector Register 0	| 0x1FFE0018 | 0x4		| High bits of uint64 sector to read	|
+| SD Read Sector Register 1	| 0x1FFE001C | 0x4		| Low bits of uin64 sector to read	|
+| SD Read number of sectors	| 0x1FFE0020 | 0x4		| v2 code has this hard coded to always read 1 sector	|
+| Select Rom				| 0x1FFE0024 | 0xFF		| Send title of rom to load from sd card e.g. "my_homebrew_rom.z64"	|
 
 # Examples of SD card access
 Libdragon sdfs implementation for DreamDrive64. This code is just snippets and may not "just work" yet. It should give you an idea of how to use the command registers and the order that things need to be done in.
