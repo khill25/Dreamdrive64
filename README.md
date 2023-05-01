@@ -18,6 +18,11 @@ The shell will need to be cut to accomodate the SD Card slot and USB port.
 		* This cut should start approximately 46.5mm from the bottom of the shell on the outside edge.
 	* 3mm Deep on the back shell
 	* Less than 1mm deep on the front shell
+	
+* "Boot" Button (Press while plugging in USB to load new firmware)
+	* Drill small hole
+		* 28.6mm from left side of back shell (5mm right of screw hole)
+		* ~6.2mm down from the screw hole
 
 ---
 # Current Dev Status
