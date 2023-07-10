@@ -11,24 +11,4 @@
 
 #include "pico/stdlib.h"
 
-// todo: review this later
-uint16_t sram[SRAM_256KBIT_SIZE / sizeof(uint16_t)];
-
-// sram_backup will be aligned to 4096 to match the flash sector erase size
-uint16_t __aligned(4096) __attribute__((section(".n64_sram"))) sram_backup[SRAM_1MBIT_SIZE / sizeof(uint16_t)];
-
-void sram_load_from_flash(void)
-{
-	memcpy(sram, sram_backup, sizeof(sram));
-}
-
-void sram_save_to_flash(void)
-{
-	uint32_t offset = ((uint32_t) sram_backup) - XIP_BASE;
-	uint32_t count = sizeof(sram);
-
-	// TODO Save SRAM to SD Card via mcu2
-	// Don't need to save sram to flash anymore. This should be saved to the SDCard.
-	// picocart_flash_range_erase(offset, count);
-	// picocart_flash_range_program(offset, (const uint8_t *)sram, count);
-}
+uint16_t *sram;

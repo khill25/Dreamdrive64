@@ -26,8 +26,7 @@ __N64_ROM_LENGTH__ = DEFINED(__N64_ROM_LENGTH__) ? __N64_ROM_LENGTH__ : 1856k;
 MEMORY
 {
     FLASH(rx) : ORIGIN = 0x10000000, LENGTH = 128k
-    N64_SRAM(rx) : ORIGIN = 0x10020000, LENGTH = 128k
-    N64_ROM(rx) : ORIGIN = 0x10040000, LENGTH = __N64_ROM_LENGTH__
+    N64_ROM(rx) : ORIGIN = 0x10020000, LENGTH = __N64_ROM_LENGTH__
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 256k
     SCRATCH_X(rwx) : ORIGIN = 0x20040000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20041000, LENGTH = 4k
@@ -254,11 +253,7 @@ SECTIONS
     ASSERT( __binary_info_header_end - __logical_binary_start <= 256, "Binary info must be in first 256 bytes of the binary")
     /* todo assert on extra code */
 
-    /* Custom for PicoCart */
-    .n64_sram : {
-        *(.n64_sram)
-    } > N64_SRAM
-
+    /* Custom for Dreamdrive */
     .n64_rom : {
         *(.n64_rom)
     } > N64_ROM

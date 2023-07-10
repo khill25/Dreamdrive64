@@ -118,11 +118,11 @@ target_link_libraries(dreamdrive64
 pico_enable_stdio_usb(dreamdrive64 0)
 pico_enable_stdio_uart(dreamdrive64 1)
 
-pico_generate_pio_header(dreamdrive64 
+pico_generate_pio_header(dreamdrive64
     ${CMAKE_CURRENT_LIST_DIR}/pio_uart/pio_uart.pio
 )
 
-pico_generate_pio_header(dreamdrive64 
+pico_generate_pio_header(dreamdrive64
 ${CMAKE_CURRENT_LIST_DIR}/joybus/joybus.pio
 )
 
