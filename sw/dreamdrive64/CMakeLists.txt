@@ -123,7 +123,7 @@ pico_generate_pio_header(dreamdrive64
 )
 
 pico_generate_pio_header(dreamdrive64
-${CMAKE_CURRENT_LIST_DIR}/joybus/joybus.pio
+    ${CMAKE_CURRENT_LIST_DIR}/joybus/joybus.pio
 )
 
 #OUTPUT_DIR ${CMAKE_CURRENT_LIST_DIR})
