@@ -79,7 +79,7 @@ volatile int selected_rom_save_type = 0;    // Default to no save type
 volatile int selected_rom_cic = 2;          // 6102
 volatile int selected_rom_cic_region = -1;  // Default
 
-// Variables used for signalling sd data send 
+// Variables used for signalling sd data send
 volatile bool waitingForRomLoad = false;
 volatile bool sendDataReady = false;
 volatile uint32_t sectorToSendRegisters[2];
@@ -94,6 +94,14 @@ volatile bool start_loadSramData = false;
 volatile bool is_verifying_rom_data_from_mcu1 = false;
 volatile uint32_t verifyDataTime = 0;
 
+// Used to set if an sram write has occured
+volatile bool did_write_SRAM = false;
+
+// There is some kind of limitation on the number of FIL objects which is causing
+// EEPROM saving to stop working after a rom is loaded :/
+// Just use a global FIL object. Janky but should be okay for now.
+FIL g_file;
+
 int save_saveData_to_sd(FIL* saveFile, char* saveFilename, int ddr_saveType);
 int load_saveData_from_sd(FIL* saveFile, char* saveFilename, int ddr_saveType);
 
@@ -105,7 +113,7 @@ void ddr64_set_sd_read_sector_part(int index, uint32_t value) {
 }
 
 void ddr64_set_sd_read_sector_count(int index, uint32_t count) {
-    sd_sector_count_registers[index] = count; 
+    sd_sector_count_registers[index] = count;
 }
 
 void ddr64_set_sd_rom_selection_length_register(uint32_t value, int index) {
@@ -208,6 +216,32 @@ void ddr64_send_load_new_rom_command() {
     }
 }
 
+// Send SRAM data to mcu2 to be saved to the sd card
+void send_SRAM_data() {
+    return;
+    // TODO this method needs to send data in 2k chunks,
+    // as the SRAM is at least 32KB and our comm buffer is only 2KB
+    // There are only a few games that even use SRAM (14?)
+    // Disable sending SRAM save data for now...
+
+    // uint8_t backupCommand;
+    // uint16_t numBytesToSend = 0x8000; // 32KB, default sram save size
+
+    // uart_tx_program_putc(COMMAND_START);
+    // uart_tx_program_putc(COMMAND_START2);
+    // uart_tx_program_putc(COMMAND_BACKUP_SRAM);
+    // uart_tx_program_putc((uint8_t)(numBytesToSend >> 8));
+    // uart_tx_program_putc((uint8_t)(numBytesToSend));
+
+    // uint8_t* sram_8Bit = (uint8_t*)sram;
+
+    // for (int i = 0; i < numBytesToSend; i++) {
+    //     while (!uart_tx_program_is_writable()) {
+    //         tight_loop_contents();
+    //     }
+    //     uart_tx_program_putc(sram_8Bit[i]);
+    // }
+}
 
 void extract_metadata_and_send_save_info(char* buf, FIL* fil) {
     printf("Rom serial: %c%c%c%c\n", buf[0x3B], buf[0x3C], buf[0x3D], buf[0x3E]);
@@ -227,7 +261,7 @@ void extract_metadata_and_send_save_info(char* buf, FIL* fil) {
     uart_tx_program_putc(COMMAND_SET_EEPROM_TYPE);
     uart_tx_program_putc(0);
     uart_tx_program_putc(2);
-    
+
     if(saveType == 3) {
         eeprom_type = EEPROM_TYPE_4K;
         uart_tx_program_putc((uint8_t)(EEPROM_TYPE_4K >> 8));
@@ -273,12 +307,10 @@ void load_new_rom(char* filename) {
     sleep_ms(10);
     printf("Mounted!\n");
 
-	FIL fil;
-
 	printf("\n\n---- read /%s -----\n", filename);
 
     printf("Open file...\n");
-	fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ);
+	fr = f_open(&g_file, filename, FA_OPEN_EXISTING | FA_READ);
 	if (FR_OK != fr && FR_EXIST != fr) {
 		panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
 	}
@@ -296,12 +328,12 @@ void load_new_rom(char* filename) {
     volatile bool isFirstRead = true;
 	uint64_t t0 = to_us_since_boot(get_absolute_time());
 	do {
-        fr = f_read(&fil, buf, sizeof(buf), &len);
+        fr = f_read(&g_file, buf, sizeof(buf), &len);
         uint32_t addr = total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
-        
+
         // Write data to the psram chips
         qspi_spi_write_buf(addr, buf, len);
-		
+
         total += len;
 
         // Once we have read the first chunk of bytes this includes the rom header
@@ -310,14 +342,14 @@ void load_new_rom(char* filename) {
         if (isFirstRead) {
             isFirstRead = false;
 
-            fr = f_close(&fil);
+            fr = f_close(&g_file);
 
             printf("Finding rom info...\n");
-            extract_metadata_and_send_save_info(buf, &fil);
+            extract_metadata_and_send_save_info(buf, &g_file);
             printf("Resuming rom load...\n");
 
-            fr = f_open(&fil, filename, FA_OPEN_EXISTING | FA_READ);
-            f_lseek(&fil, len);
+            fr = f_open(&g_file, filename, FA_OPEN_EXISTING | FA_READ);
+            f_lseek(&g_file, len);
         }
 
         int newChip = psram_addr_to_chip(total);
@@ -336,7 +368,7 @@ void load_new_rom(char* filename) {
 
 	printf("Read %d bytes and programmed PSRAM in %d ms (%d kB/s)\n\n\n", total, delta, kBps);
 
-	fr = f_close(&fil);
+	fr = f_close(&g_file);
 	if (FR_OK != fr) {
 		printf("f_close error: %s (%d)\n", FRESULT_str(fr), fr);
 	}
@@ -358,7 +390,7 @@ void load_new_rom(char* filename) {
                 printf("PSRAM-MCU2[%08x]: %08x\n", i * 4, word);
             }
         }
-        
+
         // exit quad mode once finished with read
         qspi_qspi_exit_quad_mode();
         sleep_ms(100);
@@ -395,14 +427,14 @@ bool command_processBuffer = false;
 
 #define COMMAND_HEADER_LENGTH 3
 //COMMAND, NUM_BYTES_HIGH, NUM_BYTES_LOW
-uint8_t commandHeaderBuffer[COMMAND_HEADER_LENGTH]; 
+uint8_t commandHeaderBuffer[COMMAND_HEADER_LENGTH];
 
 unsigned char mcu2_cmd_buffer[64]; // TODO rename
 int echoIndex = 0;
 void mcu1_process_rx_buffer() {
     while (rx_uart_buffer_has_data()) {
         uint8_t value = rx_uart_buffer_get();
-        
+
         #if MCU1_ECHO_RECEIVED_DATA == 1
         uart_tx_program_putc(value);
         #endif
@@ -412,7 +444,7 @@ void mcu1_process_rx_buffer() {
                 // Special case to send bytes directly into the eeprom array
                 if (commandHeaderBuffer[0] == COMMAND_LOAD_BACKUP_EEPROM) {
                     eeprom[bufferIndex] = value;
-                
+
                 // Special case to send bytes directly into the sram array
                 } else if (commandHeaderBuffer[0] == COMMAND_LOAD_SRAM_BACKUP) {
                     ((uint8_t*)(sram))[bufferIndex] = value;
@@ -427,7 +459,7 @@ void mcu1_process_rx_buffer() {
                     command_processBuffer = true;
                     bufferIndex = 0;
                 }
-                
+
             } else if (isReadingCommandHeader) {
                 commandHeaderBuffer[command_headerBufferIndex++] = value;
 
@@ -505,7 +537,7 @@ void mcu1_process_rx_buffer() {
 void mcu2_process_rx_buffer() {
     while (rx_uart_buffer_has_data()) {
         char ch = rx_uart_buffer_get();
-        
+
         #if MCU2_PRINT_UART == 1
         printf("%02x ", ch);
         #endif
@@ -540,7 +572,7 @@ void mcu2_process_rx_buffer() {
                 } else {
                     ddr64_useDynamicBuffer = false;
                 }
-                
+
                 isReadingCommandHeader = false;
                 receivingData = true;
                 command_headerBufferIndex = 0;
@@ -549,7 +581,7 @@ void mcu2_process_rx_buffer() {
             #if MCU2_PRINT_UART == 1
             printf("\n");
             #endif
-            
+
         } else if (ch == COMMAND_START && !receivingData) {
             mayHaveStart = true;
         } else if (ch == COMMAND_START2 && mayHaveStart && !receivingData) {
@@ -570,7 +602,7 @@ void mcu2_process_rx_buffer() {
                 sectorToSendRegisters[1] = sector_back;
                 numSectorsToSend = 1;
                 sendDataReady = true;
-                
+
             } else if (command == COMMAND_LOAD_ROM) {
                 sprintf(sd_selected_rom_title, "%s", buffer);
                 startRomLoad = true;
@@ -645,13 +677,13 @@ void extract_filename_from_possible_filepath(char* filepath, char* filename) {
 }
 
 void start_eeprom_sd_save() {
-    FIL eepromSave;
-    save_saveData_to_sd(&eepromSave, sd_selected_rom_title, 0);
+    // FIL eepromSave;
+    save_saveData_to_sd(&g_file, sd_selected_rom_title, 0);
 }
 
 void start_sram_sd_save() {
-    FIL sramSave;
-    save_saveData_to_sd(&sramSave, sd_selected_rom_title, 1);
+    // FIL sramSave;
+    save_saveData_to_sd(&g_file, sd_selected_rom_title, 1);
 }
 
 // void save_eeprom_to_sd(FIL* eepromFile) {
@@ -697,7 +729,7 @@ void start_sram_sd_save() {
 //     extract_filename_from_possible_filepath(sd_selected_rom_title, tempFilename);
 //     sprintf(eepromSaveFilename, "0:/ddr_firmware/n64/eeprom/%s.eep", tempFilename);
 //     free(tempFilename);
-    
+
 //     FRESULT fr = f_open(eepromFile, eepromSaveFilename, FA_READ);
 //     if (FR_OK != fr && FR_EXIST != fr) {
 //         printf("'%s' file not found. Error: %u\n", eepromSaveFilename, fr);
@@ -764,25 +796,26 @@ int save_saveData_to_sd(FIL* saveFile, char* saveFilename, int ddr_saveType) {
     char* extractedFilename = malloc(256 + 5);
 
     extract_filename_from_possible_filepath(sd_selected_rom_title, extractedFilename);
-    sprintf(dataSaveFilePath, "%s%s.%s", saveFilePath, extractedFilename);
+    sprintf(dataSaveFilePath, "%s%s.%s", saveFilePath, extractedFilename, fileExtension);
     free(extractedFilename);
 
+    printf("Opening file...\n");
     FRESULT fr = f_open(saveFile, dataSaveFilePath, FA_CREATE_ALWAYS | FA_WRITE);
     if (fr != FR_OK) {
-        printf("'%s' Cannot be opened. Error: %u\n", saveFilename, fr);
+        printf("'%s' Cannot be opened. Error: %u\n", dataSaveFilePath, fr);
         printf("Aborting save :(\n");
         return -1;
     }
 
     printf("Writing %u bytes\n", save_data_numBytesToBackup);
-    
+
     uint8_t* buf;
     if (ddr_saveType == 0) {
         buf = (uint8_t*)ddr64_uart_tx_buf;
     } else if (ddr_saveType == 1) {
         buf = (uint8_t*)ddr64_dynamic_large_buffer;
     }
-    
+
     uint numWritten = 0;
     f_write(saveFile, buf, save_data_numBytesToBackup, &numWritten);
     f_close(saveFile);
@@ -790,7 +823,7 @@ int save_saveData_to_sd(FIL* saveFile, char* saveFilename, int ddr_saveType) {
     if (numWritten != save_data_numBytesToBackup) {
         printf("Error saving data. Wrote %d but expected %u\n", numWritten, save_data_numBytesToBackup);
     } else {
-        printf("Data saved to %s\n", dataSaveFilePath);
+        printf("Data saved to '%s'\n", dataSaveFilePath);
     }
 
     free(dataSaveFilePath);
@@ -823,7 +856,7 @@ int load_saveData_from_sd(FIL* saveFile, char* saveFilename, int ddr_saveType) {
     extract_filename_from_possible_filepath(sd_selected_rom_title, tempFilename);
     sprintf(dataSaveFilePath, "%s%s.%s", saveFilePath, tempFilename, fileExtension);
     free(tempFilename);
-    
+
     FRESULT fr = f_open(saveFile, dataSaveFilePath, FA_READ);
     if (FR_OK != fr && FR_EXIST != fr) {
         printf("'%s' file not found. Error: %u\n", dataSaveFilePath, fr);
@@ -896,11 +929,11 @@ void send_data(uint32_t sectorCount) {
     do {
         loopCount++;
 
-        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);        
+        DRESULT dr = disk_read(0, diskReadBuffer, (uint64_t)sector, 1);
         if (dr != RES_OK) {
             printf("Error reading disk: %d\n", dr);
-        } 
-        
+        }
+
         sectorCount--;
 
         // Send sector worth of data
@@ -915,7 +948,7 @@ void send_data(uint32_t sectorCount) {
 
     // Repeat if we are reading more than 1 sector
     } while(sectorCount > 1);
-    
+
     #if PRINT_BUFFER_AFTER_SEND == 1
     printf("buffer for sector: %ld\n", sector);
     for (uint diskBufferIndex = 0; diskBufferIndex < DISK_READ_BUFFER_SIZE; diskBufferIndex++) {
@@ -930,7 +963,7 @@ void send_data(uint32_t sectorCount) {
 
 void send_sd_card_data() {
     // Reset send data flag
-    sendDataReady = false; 
+    sendDataReady = false;
 
     // Send the data over uart back to MCU1 so the rom can read it
     // Sector is fetched from the sectorToSendRegisters
@@ -983,7 +1016,7 @@ void test_read_psram(const char* filename) {
 		panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
 	}
 
-	FIL fil;
+	FIL fil = g_file;
 
 	printf("\n\n---- read /%s -----\n", filename);
 
@@ -1021,7 +1054,7 @@ void test_read_psram(const char* filename) {
 	int len = 0;
 	int total = 0;
 	uint64_t t0 = to_us_since_boot(get_absolute_time());
-    
+
 	// do {
         fr = f_read(&fil, buf, sizeof(buf), &len);
         uint32_t addr = 0;//total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
@@ -1078,9 +1111,9 @@ void test_read_psram(const char* filename) {
     // do {
         fr = f_read(&fil, buf, sizeof(buf), &len);
         addr = 0;//total - ((currentPSRAMChip - START_ROM_LOAD_CHIP_INDEX) * PSRAM_CHIP_CAPACITY_BYTES);
-        
+
         volatile uint16_t* buf_16 = (volatile uint16_t*)buf;
-        
+
         len = 64;
 
         for (int c = 1; c <= numChipsToUse; c++) {
@@ -1093,7 +1126,7 @@ void test_read_psram(const char* filename) {
                     volatile uint16_t *ptr_16 = (volatile uint16_t *)0x13000000;
                     uint16_t word = ptr_16[i];
                     uint16_t b = buf_16[i];
-                    
+
                     if (l == 0) {
                         if (i % 4 == 0) { printf("\n[%08x]: ", i*2); }
                         printf("%04x ", word);
@@ -1108,7 +1141,7 @@ void test_read_psram(const char* filename) {
                 }
                 sleep_ms(10);
             }
-            
+
             qspi_qspi_exit_quad_mode();
         }
 
@@ -1210,7 +1243,7 @@ void test_read_psram(const char* filename) {
             totalErrorsFound += errors;
         }
         printf("\n\n");
-        
+
         // for (int i = 0; i < 512; i+=2) {
         //     volatile uint16_t word = ptr[i];
         //     volatile uint16_t word2 = ptr[i+1];
@@ -1236,7 +1269,7 @@ void test_read_psram(const char* filename) {
     // int o = 0;
     // for (int i = 0; i < 128; i++) {
     //     volatile uint32_t word = testReadBuf[i];
-    //     if (i % 16 == 0) { 
+    //     if (i % 16 == 0) {
     //         printf("Chip %d\n", o + START_ROM_LOAD_CHIP_INDEX);
     //     }
     //     printf("PSRAM-MCU2[%08x]: %08x\n",i * 4 + (o * 8 * 1024 * 1024), word);
@@ -1246,7 +1279,7 @@ void test_read_psram(const char* filename) {
     //         o++;
     //     }
     // }
-    
+
     // #endif
 
     // printf("Rom Loaded, MCU2 qspi: OFF, sending mcu1 rom loaded command\n");

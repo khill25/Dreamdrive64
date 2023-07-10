@@ -155,8 +155,8 @@ uint16_t rom_read_test(int dma_chan) {
 }
 
 uint32_t last_rom_cache_update_address = 0;
-void __no_inline_not_in_flash_func(mcu1_core1_entry)() {	
-	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms	
+void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
+	pio_uart_init(PIN_MCU2_DIO, PIN_MCU2_CS); // turn on inter-mcu comms
 	// pio_uart_stop(false, true); // disable rx?
 
 	bool readingData = false;
@@ -169,28 +169,39 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 	volatile uint32_t t = 0;
 	volatile uint32_t it = 0;
 	volatile uint32_t t2 = 0;
-	
+
+	volatile uint32_t lastSramWrite = 0;
+	volatile bool romIsLoaded = false;
+
 	while (1) {
 		tight_loop_contents();
 
-		// Tick every second
-		if(time_us_32() - t > 1000000) {
+		// Tick every 1ms
+		if (time_us_32() - t > 1000) {
 			t = time_us_32();
-			t2++;
-			
-			// if (t2 == 4) {
-			// 	mcu1_process_rx_buffer();
-			// }
-		}
 
-		// process_log_buffer();
+			// Only handle this if the cart is using sram
+			if(eeprom_type == 0 && romIsLoaded) {
+				if(did_write_SRAM) {
+					did_write_SRAM = false;
+					lastSramWrite = t;
+				}
+
+				// If the last sram write was more than 100ms ago,
+				// send the command to write the sram to the sd card
+				if (t - lastSramWrite > 100000) {
+					lastSramWrite = 0;
+					send_SRAM_data();
+				}
+			}
+		}
 
 		if (startJoybus) {
 			startJoybus = false;
-			// Joybus currently runs in a while loop. 
+			// Joybus currently runs in a while loop.
 			// Running the joybus means that other code here
 			// will not run once joybus is started.
-			enable_joybus(); 
+			enable_joybus();
 		}
 
 		// This would typically be used with test load code after a rom has been loaded
@@ -257,6 +268,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 				isWaitingForRomLoad = false;
 				sd_is_busy = false;
 				readingData = false;
+				romIsLoaded = true;
 
 				// disable uart rx
 				pio_uart_stop(false, true);
@@ -278,7 +290,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					// Finally start processing the uart buffer
 					readingData = true;
 					rx_uart_buffer_reset();
-					
+
 					ddr64_send_sd_read_command();
 					break;
 
@@ -286,7 +298,7 @@ void __no_inline_not_in_flash_func(mcu1_core1_entry)() {
 					sd_is_busy = true;
 					romLoading = true;
 					isWaitingForRomLoad = true;
-					
+
 					readingData = true;
 					rx_uart_buffer_reset();
 
@@ -344,13 +356,13 @@ void boardTest() {
 
 	gpio_init(PIN_N64_ALEH);
     gpio_set_dir(PIN_N64_ALEH, false);
-    
+
     gpio_init(PIN_N64_ALEL);
     gpio_set_dir(PIN_N64_ALEL, false);
-    
+
     gpio_init(PIN_N64_READ);
     gpio_set_dir(PIN_N64_READ, false);
-    
+
     gpio_init(PIN_N64_COLD_RESET);
     gpio_set_dir(PIN_N64_COLD_RESET, false);
 
@@ -417,7 +429,7 @@ void __no_inline_not_in_flash_func(mcu1_main)(void)
 	// const int freq_khz = 384000;
 	// const int freq_khz = 400000;
 
-	// IMPORTANT: For the serial comms between mcus to work properly 
+	// IMPORTANT: For the serial comms between mcus to work properly
 	// both mcus must be run at the same clk speed or have the pio divder set accordingly
 
 	// Note that this might call set_sys_clock_pll,

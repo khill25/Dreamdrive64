@@ -30,6 +30,8 @@ extern volatile int selected_rom_save_type;
 extern volatile int selected_rom_cic;
 extern volatile int selected_rom_cic_region;
 
+extern volatile bool did_write_SRAM;
+
 // UART TX buffer
 extern volatile uint16_t ddr64_uart_tx_buf[DDR64_BASE_ADDRESS_LENGTH];
 
@@ -51,6 +53,9 @@ void ddr64_set_rom_meta_data(uint32_t value, int index);
 
 void ddr64_send_sd_read_command(void);
 
+// MCU1 will call this method to send the sram contents to mcu2
+void send_SRAM_data();
+
 extern volatile bool sd_is_busy;
 //bool is_sd_busy();
 
@@ -67,7 +72,7 @@ void mount_sd(void);
 
 /* sd/rom/psram stuff */
 // loads the rom file specified in sd_selected_rom_title, that is set with the load rom command from mcu1
-void load_selected_rom(); 
+void load_selected_rom();
 void load_rom(const char *filename);
 
 void ddr64_send_load_new_rom_command();

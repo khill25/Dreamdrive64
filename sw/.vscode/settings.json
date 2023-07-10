@@ -35,10 +35,12 @@
         "gpio_helper.h": "c",
         "qspi_helper.h": "c",
         "n64_cic.h": "c",
-        "pc64_utils.h": "c"
+        "pc64_utils.h": "c",
+        "sram.h": "c",
+        "stdio_async_uart.h": "c"
     },
     "cmake.configureArgs": [
-        "-DREGION=NTSC", 
+        "-DREGION=NTSC",
         "-DFLASH_SIZE_MB=16"
     ]
 }
