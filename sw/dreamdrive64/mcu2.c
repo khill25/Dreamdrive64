@@ -35,6 +35,8 @@
 #include "ff.h"
 #include <string.h>
 
+#include "debug.h"
+
 #define UART0_BAUD_RATE  (115200)
 
 // Priority 0 = lowest, 31 = highest
@@ -177,6 +179,12 @@ void main_task_entry(__unused void *params)
 			start_eeprom_sd_save();
 		}
 
+		if (start_saveSramData) {
+			start_saveSramData = false;
+			start_sram_sd_save();
+		}
+
+	#if IS_DOING_READ_TEST == 1
 		if (is_verifying_rom_data_from_mcu1) {
 			is_verifying_rom_data_from_mcu1 = false;
 			mcu2_verify_sent_rom_data();
@@ -186,6 +194,7 @@ void main_task_entry(__unused void *params)
 				verifyDataTime = time_us_32();
 			}
 		}
+	#endif
 
 		// NMI is pulses when the reset button is pressed.
 		// Doesn't appear to toggle state until the button is released?

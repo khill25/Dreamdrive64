@@ -25,7 +25,7 @@ void sendEepromData() {
         return;
     }
 
-    uint8_t backupCommand; 
+    uint8_t backupCommand;
     uint16_t numBytesToSend;
 
     if (eeprom_type == EEPROM_TYPE_4K) {
@@ -39,7 +39,7 @@ void sendEepromData() {
     uart_tx_program_putc(COMMAND_BACKUP_EEPROM);
     uart_tx_program_putc((uint8_t)(numBytesToSend >> 8));
     uart_tx_program_putc((uint8_t)(numBytesToSend));
-    
+
     for (int i = 0; i < numBytesToSend; i++) {
         while (!uart_tx_program_is_writable()) {
             tight_loop_contents();
@@ -119,31 +119,42 @@ void __time_critical_func(processJoybus)(int dataPin) {
 
     sm_config_set_out_shift(&config, true, false, 32);
     sm_config_set_in_shift(&config, false, true, 8);
-    
+
     pio_sm_init(pio, 0, offset, &config);
     pio_sm_set_enabled(pio, 0, true);
-    
+
     bool resetStateChanged = false;
     bool lastResetState = false;
-    uint32_t waitTime = (1 * 1000000);//(1 * 60 * 1000000); 
+    uint32_t waitTime = (1 * 1000000);//(1 * 60 * 1000000);
+    uint32_t thirtySeconds = 1 * 30 * 1000000;
     uint32_t startTime = time_us_32();
     volatile uint8_t buffer[3] = {0};
     volatile bool hasSentJoybusInfo = false;
+    volatile bool isFirstLoad = true;
+    volatile uint32_t lastWriteTime = 0;
+    volatile uint32_t lastReadTime = time_us_32();
     while (true) {
         if(pio_sm_is_rx_fifo_empty(pio, 0)) {
             uint32_t now = time_us_32();
-            uint32_t diff = now - startTime;
-            
-            // If the joybus has already sent the info, this is likely the first load
-            // or a reset, but appears to happen during game play, at least in goldeneye.
-            if (hasSentJoybusInfo && diff > waitTime) {
-                startTime = now;
-                hasSentJoybusInfo = false;
+            uint32_t diff = now - lastWriteTime;
+
+            if (isFirstLoad && (now - lastReadTime) < thirtySeconds) {
+                continue;
+            }
+
+            // 30 seconds has passed so no longer the first load
+            isFirstLoad = false;
+
+            // Send the eeprom data if it's been ?Seconds since the last eeprom write
+            // Reset the lastWriteTime to 0 and don't sent the data unless we get another write
+            if (lastWriteTime != 0 && diff > waitTime) {
+                lastWriteTime = 0;
                 sendEepromData();
             }
+
             continue; // don't process loop
         } else {
-            buffer[0] = pio_sm_get(pio, 0); 
+            buffer[0] = pio_sm_get(pio, 0);
         }
 
         if (buffer[0] == 0) { // INFO
@@ -196,13 +207,14 @@ void __time_critical_func(processJoybus)(int dataPin) {
             uint32_t result[2];
             int resultLen = 1;
             result[0] = 0x0003aaaa;
-        
+
             pio_sm_set_enabled(pio, 0, false);
             pio_sm_init(pio, 0, offset+joybus_offset_outmode, &config);
             pio_sm_set_enabled(pio, 0, true);
 
             for (int i = 0; i<resultLen; i++) pio_sm_put_blocking(pio, 0, result[i]);
-            
+
+            lastWriteTime = time_us_32();
         }
         else {
             pio_sm_set_enabled(pio, 0, false);
@@ -221,7 +233,7 @@ void enable_joybus() {
         printf("No eeprom type, not enabling joybus\n");
         return;
     }
-    
+
     printf("Enabling joybus\n");
     processJoybus(21); // on pin 21
 }
